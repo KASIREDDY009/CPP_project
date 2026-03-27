@@ -290,6 +290,7 @@ def analyze_recipe_text(recipe_id, event):
     text = f"{recipe.get('title', '')}. {recipe.get('description', '')}. {recipe.get('instructions', '')}"
     text = text[:4500]  # Comprehend has a 5KB limit per request
 
+    errors = []
     insights = {
         'recipeId': recipe_id,
         'keyPhrases': [],
@@ -314,7 +315,7 @@ def analyze_recipe_text(recipe_id, event):
         insights['keyPhrases'] = insights['keyPhrases'][:20]  # Top 20
     except Exception as e:
         print(f'[ERROR] Comprehend detect_key_phrases failed: {e}')
-        insights['keyPhrases'] = []
+        errors.append(f'keyPhrases: {type(e).__name__}: {str(e)}')
 
     # Detect sentiment (positive, negative, neutral, mixed)
     try:
@@ -330,7 +331,7 @@ def analyze_recipe_text(recipe_id, event):
         }
     except Exception as e:
         print(f'[ERROR] Comprehend detect_sentiment failed: {e}')
-        insights['sentiment'] = {'overall': 'UNKNOWN', 'scores': {}}
+        errors.append(f'sentiment: {type(e).__name__}: {str(e)}')
 
     # Detect entities (food items, quantities, locations, etc.)
     try:
@@ -348,8 +349,10 @@ def analyze_recipe_text(recipe_id, event):
         insights['entities'] = insights['entities'][:15]
     except Exception as e:
         print(f'[ERROR] Comprehend detect_entities failed: {e}')
-        insights['entities'] = []
+        errors.append(f'entities: {type(e).__name__}: {str(e)}')
 
+    if errors:
+        insights['errors'] = errors
     return build_response(200, {'insights': insights})
 
 
