@@ -13,6 +13,7 @@ import uuid
 import base64
 import os
 from datetime import datetime, timezone
+from decimal import Decimal
 
 import boto3
 from botocore.exceptions import ClientError
@@ -56,13 +57,27 @@ def build_response(status_code, body):
     }
 
 
+def convert_floats(obj):
+    """Recursively convert float/int values to Decimal for DynamoDB compatibility."""
+    if isinstance(obj, float):
+        return Decimal(str(obj))
+    if isinstance(obj, int) and not isinstance(obj, bool):
+        return Decimal(str(obj))
+    if isinstance(obj, dict):
+        return {k: convert_floats(v) for k, v in obj.items()}
+    if isinstance(obj, list):
+        return [convert_floats(i) for i in obj]
+    return obj
+
+
 def parse_body(event):
     """Safely parse the JSON body from the API Gateway event."""
     body = event.get('body')
     if not body:
         return {}
     try:
-        return json.loads(body)
+        parsed = json.loads(body)
+        return convert_floats(parsed)
     except (json.JSONDecodeError, TypeError):
         return {}
 
