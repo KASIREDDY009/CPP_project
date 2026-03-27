@@ -2,10 +2,10 @@ import { useState, useEffect } from 'react'
 import { useParams, useNavigate, Link } from 'react-router-dom'
 import {
   Clock, Users, Tag, Pencil, Trash2, ArrowLeft, Loader2,
-  Flame, Zap, Wheat, Droplets, Brain, Sparkles, MessageCircle,
+  Flame, Zap, Wheat, Droplets,
 } from 'lucide-react'
 import toast from 'react-hot-toast'
-import { getRecipe, deleteRecipe, analyzeRecipe } from '../api'
+import { getRecipe, deleteRecipe } from '../api'
 
 const CATEGORY_COLORS = {
   breakfast: 'bg-amber-100 text-amber-800',
@@ -20,14 +20,6 @@ const PLACEHOLDER_GRADIENTS = [
   'from-emerald-300 via-teal-300 to-cyan-300',
   'from-rose-300 via-pink-300 to-fuchsia-300',
 ]
-
-const SENTIMENT_CONFIG = {
-  POSITIVE: { label: 'Positive', color: 'text-emerald-700 bg-emerald-50', icon: '😊' },
-  NEGATIVE: { label: 'Negative', color: 'text-red-700 bg-red-50', icon: '😟' },
-  NEUTRAL:  { label: 'Neutral', color: 'text-stone-700 bg-stone-50', icon: '😐' },
-  MIXED:    { label: 'Mixed', color: 'text-amber-700 bg-amber-50', icon: '🤔' },
-  UNKNOWN:  { label: 'Unknown', color: 'text-stone-500 bg-stone-50', icon: '❓' },
-}
 
 // Simple client-side nutrition estimation
 const NUTRITION_DB = {
@@ -74,10 +66,6 @@ export default function RecipeDetail() {
   const [error, setError] = useState(null)
   const [checked, setChecked] = useState({})
 
-  // Comprehend analysis
-  const [analyzing, setAnalyzing] = useState(false)
-  const [insights, setInsights] = useState(null)
-
   // Delete modal
   const [showDelete, setShowDelete] = useState(false)
   const [deleting, setDeleting] = useState(false)
@@ -95,20 +83,6 @@ export default function RecipeDetail() {
       console.error(err)
     } finally {
       setLoading(false)
-    }
-  }
-
-  async function handleAnalyze() {
-    setAnalyzing(true)
-    try {
-      const result = await analyzeRecipe(id)
-      setInsights(result)
-      toast.success('Analysis complete')
-    } catch (err) {
-      toast.error('Analysis failed')
-      console.error(err)
-    } finally {
-      setAnalyzing(false)
     }
   }
 
@@ -242,80 +216,6 @@ export default function RecipeDetail() {
             </section>
           )}
 
-          {/* AI Insights (Comprehend) */}
-          <section className="bg-white rounded-2xl border border-stone-100 shadow-sm shadow-orange-50/60 p-6">
-            <h2 className="font-display text-xl font-semibold text-stone-800 mb-4 flex items-center gap-2">
-              <Brain className="w-5 h-5 text-orange-500" /> AI Recipe Insights
-            </h2>
-            <p className="text-sm text-stone-400 mb-4">
-              Use Amazon Comprehend to extract key phrases, detect sentiment, and identify entities from your recipe.
-            </p>
-            <button
-              onClick={handleAnalyze}
-              disabled={analyzing}
-              className="inline-flex items-center gap-2 px-5 py-2 rounded-xl bg-gradient-to-r from-orange-500 to-orange-600 text-white text-sm font-medium hover:from-orange-600 hover:to-orange-700 disabled:opacity-40 transition shadow-sm shadow-orange-200/60"
-            >
-              {analyzing ? <Loader2 className="w-4 h-4 animate-spin" /> : <Sparkles className="w-4 h-4" />}
-              {analyzing ? 'Analyzing...' : insights ? 'Re-analyze' : 'Analyze Recipe'}
-            </button>
-
-            {insights && (
-              <div className="mt-6 space-y-5 border-t border-stone-100 pt-5">
-                {/* Sentiment */}
-                {insights.sentiment?.overall && (
-                  <div>
-                    <p className="text-xs font-semibold text-stone-500 uppercase tracking-wide mb-2 flex items-center gap-1.5">
-                      <MessageCircle className="w-3.5 h-3.5" /> Sentiment
-                    </p>
-                    <div className="flex items-center gap-3">
-                      <span className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-sm font-semibold ${SENTIMENT_CONFIG[insights.sentiment.overall]?.color || 'bg-stone-50 text-stone-600'}`}>
-                        {SENTIMENT_CONFIG[insights.sentiment.overall]?.icon} {SENTIMENT_CONFIG[insights.sentiment.overall]?.label}
-                      </span>
-                      {insights.sentiment.scores && (
-                        <div className="flex gap-3 text-xs text-stone-400">
-                          <span>Positive: {insights.sentiment.scores.positive}%</span>
-                          <span>Neutral: {insights.sentiment.scores.neutral}%</span>
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                )}
-
-                {/* Key Phrases */}
-                {insights.keyPhrases?.length > 0 && (
-                  <div>
-                    <p className="text-xs font-semibold text-stone-500 uppercase tracking-wide mb-2 flex items-center gap-1.5">
-                      <Sparkles className="w-3.5 h-3.5" /> Key Phrases
-                    </p>
-                    <div className="flex flex-wrap gap-2">
-                      {insights.keyPhrases.map((kp, i) => (
-                        <span key={i} className="px-2.5 py-1 bg-orange-50 text-orange-700 rounded-full text-xs font-medium">
-                          {kp.text}
-                          <span className="ml-1 text-orange-400">{kp.confidence}%</span>
-                        </span>
-                      ))}
-                    </div>
-                  </div>
-                )}
-
-                {/* Entities */}
-                {insights.entities?.length > 0 && (
-                  <div>
-                    <p className="text-xs font-semibold text-stone-500 uppercase tracking-wide mb-2 flex items-center gap-1.5">
-                      <Tag className="w-3.5 h-3.5" /> Entities Detected
-                    </p>
-                    <div className="flex flex-wrap gap-2">
-                      {insights.entities.map((ent, i) => (
-                        <span key={i} className="px-2.5 py-1 bg-violet-50 text-violet-700 rounded-full text-xs font-medium">
-                          {ent.text} <span className="text-violet-400">({ent.type})</span>
-                        </span>
-                      ))}
-                    </div>
-                  </div>
-                )}
-              </div>
-            )}
-          </section>
         </div>
 
         {/* Right column (sidebar) */}

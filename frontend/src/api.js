@@ -38,12 +38,17 @@ export async function deleteRecipe(id) {
 }
 
 // ----------------------------------------------------------------
-// NLP Analysis (Comprehend)
+// Notifications (SNS)
 // ----------------------------------------------------------------
 
-export async function analyzeRecipe(id) {
-  const { data } = await api.post(`/recipes/${id}/analyze`)
-  return data.insights
+export async function subscribeEmail(email) {
+  const { data } = await api.post('/subscribe', { email })
+  return data
+}
+
+export async function getSubscriberCount() {
+  const { data } = await api.get('/subscribers')
+  return data.count || 0
 }
 
 // ----------------------------------------------------------------

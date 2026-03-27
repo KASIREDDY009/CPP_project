@@ -17,7 +17,7 @@ An AI-powered recipe management application that lets users create, discover, an
 | **DynamoDB** | Recipe data storage |
 | **S3** | Recipe image storage + frontend hosting |
 | **Amazon Rekognition** | Food image recognition |
-| **Amazon Comprehend** | NLP analysis - key phrases, sentiment, entities |
+| **Amazon SNS** | Email notifications for new recipes |
 
 ## Project Structure
 

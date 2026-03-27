@@ -3,7 +3,7 @@ CloudChef Recipe Manager - Lambda Function
 ==========================================
 Single Lambda function handling all API routes via API Gateway REST API.
 Manages recipes in DynamoDB with S3 image storage, Rekognition image analysis,
-and AWS Comprehend for NLP insights on recipes.
+and SNS for recipe update notifications.
 
 Region: eu-west-1
 """
@@ -23,6 +23,7 @@ from botocore.exceptions import ClientError
 # ---------------------------------------------------------------------------
 DYNAMODB_TABLE = os.environ.get('DYNAMODB_TABLE', 'cloudchef-recipes-prod')
 S3_BUCKET = os.environ.get('S3_BUCKET', 'cloudchef-images-prod')
+SNS_TOPIC_ARN = os.environ.get('SNS_TOPIC_ARN', '')
 REGION = os.environ.get('REGION', 'eu-west-1')
 
 # ---------------------------------------------------------------------------
@@ -32,7 +33,7 @@ dynamodb = boto3.resource('dynamodb', region_name=REGION)
 table = dynamodb.Table(DYNAMODB_TABLE)
 s3 = boto3.client('s3', region_name=REGION)
 rekognition = boto3.client('rekognition', region_name=REGION)
-comprehend = boto3.client('comprehend', region_name=REGION)
+sns = boto3.client('sns', region_name=REGION)
 
 # ---------------------------------------------------------------------------
 # CORS headers - attached to every response so the frontend can call the API
@@ -124,6 +125,22 @@ def detect_labels_from_s3(image_key):
         return []
 
 
+def publish_sns_notification(subject, message):
+    """Publish a notification to the CloudChef SNS topic."""
+    if not SNS_TOPIC_ARN:
+        print('[WARN] SNS_TOPIC_ARN not set, skipping notification')
+        return
+    try:
+        sns.publish(
+            TopicArn=SNS_TOPIC_ARN,
+            Subject=subject[:100],
+            Message=message
+        )
+        print(f'[INFO] SNS notification sent: {subject}')
+    except Exception as e:
+        print(f'[ERROR] SNS publish failed: {e}')
+
+
 # ===========================================================================
 # Route handlers
 # ===========================================================================
@@ -179,6 +196,20 @@ def create_recipe(event):
 
     try:
         table.put_item(Item=recipe)
+
+        # Send SNS notification about new recipe
+        publish_sns_notification(
+            f'New Recipe: {recipe["title"]}',
+            f'A new recipe has been added to CloudChef!\n\n'
+            f'Title: {recipe["title"]}\n'
+            f'Category: {recipe.get("cuisine", "N/A")}\n'
+            f'Prep Time: {recipe.get("prepTime", "N/A")} min\n'
+            f'Cook Time: {recipe.get("cookTime", "N/A")} min\n'
+            f'Servings: {recipe.get("servings", "N/A")}\n\n'
+            f'Description: {recipe.get("description", "No description")}\n\n'
+            f'Visit CloudChef to view the full recipe!'
+        )
+
         return build_response(201, {'recipe': recipe})
     except ClientError as e:
         print(f'[ERROR] DynamoDB put_item failed: {e}')
@@ -264,96 +295,57 @@ def delete_recipe(recipe_id):
 
     try:
         table.delete_item(Key={'recipeId': recipe_id})
+
+        # Send SNS notification about deleted recipe
+        publish_sns_notification(
+            f'Recipe Deleted: {recipe.get("title", "Unknown")}',
+            f'A recipe has been removed from CloudChef.\n\nTitle: {recipe.get("title", "Unknown")}'
+        )
+
         return build_response(200, {'message': 'Recipe deleted successfully', 'recipeId': recipe_id})
     except ClientError as e:
         print(f'[ERROR] DynamoDB delete_item failed: {e}')
         return build_response(500, {'error': 'Failed to delete recipe'})
 
 
-def analyze_recipe_text(recipe_id, event):
-    """
-    POST /recipes/{id}/analyze - Use AWS Comprehend to extract key phrases,
-    detect sentiment, and identify entities from the recipe text.
-    Returns NLP insights about the recipe.
-    """
-    # Fetch the recipe
+def subscribe_email(event):
+    """POST /subscribe - Subscribe an email address to recipe notifications."""
+    body = parse_body(event)
+    email = body.get('email', '')
+    if not email or '@' not in str(email):
+        return build_response(400, {'error': 'Valid email address is required'})
+
+    if not SNS_TOPIC_ARN:
+        return build_response(500, {'error': 'Notification service not configured'})
+
     try:
-        response = table.get_item(Key={'recipeId': recipe_id})
-        recipe = response.get('Item')
-        if not recipe:
-            return build_response(404, {'error': 'Recipe not found'})
+        response = sns.subscribe(
+            TopicArn=SNS_TOPIC_ARN,
+            Protocol='email',
+            Endpoint=str(email),
+            ReturnSubscriptionArn=True
+        )
+        return build_response(200, {
+            'message': f'Confirmation email sent to {email}. Please check your inbox and confirm the subscription.',
+            'subscriptionArn': response.get('SubscriptionArn', 'pending confirmation')
+        })
     except ClientError as e:
-        print(f'[ERROR] DynamoDB get_item failed: {e}')
-        return build_response(500, {'error': 'Failed to fetch recipe'})
+        print(f'[ERROR] SNS subscribe failed: {e}')
+        return build_response(500, {'error': 'Failed to subscribe email'})
 
-    # Combine recipe text for analysis
-    text = f"{recipe.get('title', '')}. {recipe.get('description', '')}. {recipe.get('instructions', '')}"
-    text = text[:4500]  # Comprehend has a 5KB limit per request
 
-    errors = []
-    insights = {
-        'recipeId': recipe_id,
-        'keyPhrases': [],
-        'sentiment': {},
-        'entities': []
-    }
+def get_subscription_count():
+    """GET /subscribers - Get the count of confirmed subscribers."""
+    if not SNS_TOPIC_ARN:
+        return build_response(200, {'count': 0})
 
-    # Detect key phrases (e.g., "fresh mozzarella", "olive oil", "golden crust")
     try:
-        kp_response = comprehend.detect_key_phrases(Text=text, LanguageCode='en')
-        phrases = kp_response.get('KeyPhrases', [])
-        # Deduplicate and sort by confidence
-        seen = set()
-        for p in sorted(phrases, key=lambda x: x['Score'], reverse=True):
-            phrase_lower = p['Text'].lower().strip()
-            if phrase_lower not in seen and len(phrase_lower) > 2:
-                seen.add(phrase_lower)
-                insights['keyPhrases'].append({
-                    'text': p['Text'],
-                    'confidence': round(p['Score'] * 100, 1)
-                })
-        insights['keyPhrases'] = insights['keyPhrases'][:20]  # Top 20
-    except Exception as e:
-        print(f'[ERROR] Comprehend detect_key_phrases failed: {e}')
-        errors.append(f'keyPhrases: {type(e).__name__}: {str(e)}')
-
-    # Detect sentiment (positive, negative, neutral, mixed)
-    try:
-        sent_response = comprehend.detect_sentiment(Text=text, LanguageCode='en')
-        insights['sentiment'] = {
-            'overall': sent_response.get('Sentiment', 'UNKNOWN'),
-            'scores': {
-                'positive': round(sent_response['SentimentScore'].get('Positive', 0) * 100, 1),
-                'negative': round(sent_response['SentimentScore'].get('Negative', 0) * 100, 1),
-                'neutral': round(sent_response['SentimentScore'].get('Neutral', 0) * 100, 1),
-                'mixed': round(sent_response['SentimentScore'].get('Mixed', 0) * 100, 1)
-            }
-        }
-    except Exception as e:
-        print(f'[ERROR] Comprehend detect_sentiment failed: {e}')
-        errors.append(f'sentiment: {type(e).__name__}: {str(e)}')
-
-    # Detect entities (food items, quantities, locations, etc.)
-    try:
-        ent_response = comprehend.detect_entities(Text=text, LanguageCode='en')
-        seen_ents = set()
-        for ent in ent_response.get('Entities', []):
-            ent_key = f"{ent['Text'].lower()}_{ent['Type']}"
-            if ent_key not in seen_ents:
-                seen_ents.add(ent_key)
-                insights['entities'].append({
-                    'text': ent['Text'],
-                    'type': ent['Type'],
-                    'confidence': round(ent['Score'] * 100, 1)
-                })
-        insights['entities'] = insights['entities'][:15]
-    except Exception as e:
-        print(f'[ERROR] Comprehend detect_entities failed: {e}')
-        errors.append(f'entities: {type(e).__name__}: {str(e)}')
-
-    if errors:
-        insights['errors'] = errors
-    return build_response(200, {'insights': insights})
+        response = sns.get_topic_attributes(TopicArn=SNS_TOPIC_ARN)
+        count = int(response['Attributes'].get('SubscriptionsConfirmed', 0))
+        return build_response(200, {'count': count})
+    except ClientError as e:
+        print(f'[ERROR] SNS get_topic_attributes failed: {e}')
+        return build_response(200, {'count': 0})
 
 
 def analyze_image(event):
@@ -397,6 +389,14 @@ def lambda_handler(event, context):
     if http_method == 'POST' and path == '/recipes/analyze-image':
         return analyze_image(event)
 
+    # Route: POST /subscribe
+    if http_method == 'POST' and path == '/subscribe':
+        return subscribe_email(event)
+
+    # Route: GET /subscribers
+    if http_method == 'GET' and path == '/subscribers':
+        return get_subscription_count()
+
     # Route: GET /recipes
     if http_method == 'GET' and path == '/recipes':
         return get_all_recipes()
@@ -414,10 +414,6 @@ def lambda_handler(event, context):
 
     if not recipe_id:
         return build_response(400, {'error': 'Recipe ID is required'})
-
-    # Route: POST /recipes/{id}/analyze (Comprehend NLP)
-    if http_method == 'POST' and path.endswith('/analyze'):
-        return analyze_recipe_text(recipe_id, event)
 
     # Route: GET /recipes/{id}
     if http_method == 'GET':

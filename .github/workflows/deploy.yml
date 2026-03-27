@@ -112,9 +112,15 @@ jobs:
           aws iam attach-role-policy --role-name cloudchef-lambda-role \
             --policy-arn arn:aws:iam::aws:policy/AmazonRekognitionFullAccess 2>/dev/null || true
           aws iam attach-role-policy --role-name cloudchef-lambda-role \
-            --policy-arn arn:aws:iam::aws:policy/ComprehendFullAccess 2>/dev/null || true
+            --policy-arn arn:aws:iam::aws:policy/AmazonSNSFullAccess 2>/dev/null || true
           aws iam attach-role-policy --role-name cloudchef-lambda-role \
             --policy-arn arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole 2>/dev/null || true
+
+      - name: Create SNS topic for notifications
+        run: |
+          SNS_TOPIC_ARN=$(aws sns create-topic --name cloudchef-recipe-notifications --region eu-west-1 --query 'TopicArn' --output text)
+          echo "SNS_TOPIC_ARN=$SNS_TOPIC_ARN" >> $GITHUB_ENV
+          echo "SNS Topic ARN: $SNS_TOPIC_ARN"
 
       - name: Wait for IAM propagation
         run: sleep 10
@@ -144,7 +150,7 @@ jobs:
               --role "$ROLE_ARN" \
               --memory-size 256 \
               --timeout 30 \
-              --environment "Variables={DYNAMODB_TABLE=cloudchef-recipes-prod,S3_BUCKET=cloudchef-images-prod-kasireddy,REGION=eu-west-1}" \
+              --environment "Variables={DYNAMODB_TABLE=cloudchef-recipes-prod,S3_BUCKET=cloudchef-images-prod-kasireddy,REGION=eu-west-1,SNS_TOPIC_ARN=${{ env.SNS_TOPIC_ARN }}}" \
               --region eu-west-1
           else
             echo "Creating new Lambda function..."
@@ -156,7 +162,7 @@ jobs:
               --zip-file fileb://lambda.zip \
               --memory-size 256 \
               --timeout 30 \
-              --environment "Variables={DYNAMODB_TABLE=cloudchef-recipes-prod,S3_BUCKET=cloudchef-images-prod-kasireddy,REGION=eu-west-1}" \
+              --environment "Variables={DYNAMODB_TABLE=cloudchef-recipes-prod,S3_BUCKET=cloudchef-images-prod-kasireddy,REGION=eu-west-1,SNS_TOPIC_ARN=${{ env.SNS_TOPIC_ARN }}}" \
               --region eu-west-1
           fi
 

@@ -1,8 +1,9 @@
 import { useState, useEffect } from 'react'
 import { Link } from 'react-router-dom'
-import { Search, Plus, BookOpen, ChefHat, Flame, UtensilsCrossed } from 'lucide-react'
+import { Search, Plus, BookOpen, ChefHat, Flame, UtensilsCrossed, Bell, Loader2, Mail } from 'lucide-react'
+import toast from 'react-hot-toast'
 import RecipeCard from '../components/RecipeCard'
-import { getRecipes } from '../api'
+import { getRecipes, subscribeEmail, getSubscriberCount } from '../api'
 
 const CATEGORIES = ['All', 'Breakfast', 'Lunch', 'Dinner', 'Snack', 'Dessert']
 
@@ -43,9 +44,13 @@ export default function Home() {
   const [error, setError] = useState(null)
   const [activeCategory, setActiveCategory] = useState('All')
   const [search, setSearch] = useState('')
+  const [subEmail, setSubEmail] = useState('')
+  const [subscribing, setSubscribing] = useState(false)
+  const [subCount, setSubCount] = useState(0)
 
   useEffect(() => {
     fetchRecipes()
+    getSubscriberCount().then(c => setSubCount(c)).catch(() => {})
   }, [])
 
   async function fetchRecipes() {
@@ -59,6 +64,26 @@ export default function Home() {
       console.error(err)
     } finally {
       setLoading(false)
+    }
+  }
+
+  async function handleSubscribe(e) {
+    e.preventDefault()
+    if (!subEmail.trim() || !subEmail.includes('@')) {
+      toast.error('Enter a valid email address')
+      return
+    }
+    setSubscribing(true)
+    try {
+      const result = await subscribeEmail(subEmail.trim())
+      toast.success(result.message || 'Check your inbox to confirm!')
+      setSubEmail('')
+      setSubCount(prev => prev + 1)
+    } catch (err) {
+      toast.error('Subscription failed')
+      console.error(err)
+    } finally {
+      setSubscribing(false)
     }
   }
 
@@ -193,6 +218,41 @@ export default function Home() {
             ))}
           </div>
         )}
+
+        {/* Subscribe section */}
+        <section className="mt-16 bg-gradient-to-br from-orange-50 via-amber-50 to-rose-50 rounded-2xl border border-orange-100 p-8 sm:p-10">
+          <div className="max-w-lg mx-auto text-center">
+            <div className="w-12 h-12 rounded-full bg-orange-100 flex items-center justify-center mx-auto mb-4">
+              <Bell className="w-6 h-6 text-orange-600" />
+            </div>
+            <h2 className="font-display text-2xl font-bold text-stone-800 mb-2">Stay Updated</h2>
+            <p className="text-stone-500 text-sm mb-6">
+              Get notified when new recipes are added. We will send you an email with recipe details.
+              {subCount > 0 && <span className="block mt-1 text-orange-500 font-medium">{subCount} subscriber{subCount !== 1 ? 's' : ''} already joined!</span>}
+            </p>
+            <form onSubmit={handleSubscribe} className="flex flex-col sm:flex-row gap-3">
+              <div className="flex-1 relative">
+                <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-stone-400" />
+                <input
+                  type="email"
+                  value={subEmail}
+                  onChange={e => setSubEmail(e.target.value)}
+                  placeholder="your@email.com"
+                  className="w-full pl-10 pr-4 py-2.5 rounded-xl border border-stone-200 bg-white text-sm focus:outline-none focus:ring-2 focus:ring-orange-300 focus:border-orange-400 transition"
+                  required
+                />
+              </div>
+              <button
+                type="submit"
+                disabled={subscribing}
+                className="inline-flex items-center justify-center gap-2 px-6 py-2.5 rounded-xl bg-gradient-to-r from-orange-500 to-orange-600 text-white text-sm font-semibold hover:from-orange-600 hover:to-orange-700 disabled:opacity-40 transition shadow-sm shadow-orange-200/60"
+              >
+                {subscribing ? <Loader2 className="w-4 h-4 animate-spin" /> : <Bell className="w-4 h-4" />}
+                Subscribe
+              </button>
+            </form>
+          </div>
+        </section>
       </div>
     </div>
   )
