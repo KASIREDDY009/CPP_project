@@ -97,12 +97,24 @@ jobs:
             aws iam attach-role-policy --role-name cloudchef-lambda-role \
               --policy-arn arn:aws:iam::aws:policy/AmazonRekognitionFullAccess
             aws iam attach-role-policy --role-name cloudchef-lambda-role \
-              --policy-arn arn:aws:iam::aws:policy/TranslateFullAccess
+              --policy-arn arn:aws:iam::aws:policy/ComprehendFullAccess
             aws iam attach-role-policy --role-name cloudchef-lambda-role \
               --policy-arn arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
           else
-            echo "IAM role already exists, skipping creation."
+            echo "IAM role already exists, ensuring policies are attached..."
           fi
+
+          # Always ensure all policies are attached (idempotent)
+          aws iam attach-role-policy --role-name cloudchef-lambda-role \
+            --policy-arn arn:aws:iam::aws:policy/AmazonDynamoDBFullAccess 2>/dev/null || true
+          aws iam attach-role-policy --role-name cloudchef-lambda-role \
+            --policy-arn arn:aws:iam::aws:policy/AmazonS3FullAccess 2>/dev/null || true
+          aws iam attach-role-policy --role-name cloudchef-lambda-role \
+            --policy-arn arn:aws:iam::aws:policy/AmazonRekognitionFullAccess 2>/dev/null || true
+          aws iam attach-role-policy --role-name cloudchef-lambda-role \
+            --policy-arn arn:aws:iam::aws:policy/ComprehendFullAccess 2>/dev/null || true
+          aws iam attach-role-policy --role-name cloudchef-lambda-role \
+            --policy-arn arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole 2>/dev/null || true
 
       - name: Wait for IAM propagation
         run: sleep 10

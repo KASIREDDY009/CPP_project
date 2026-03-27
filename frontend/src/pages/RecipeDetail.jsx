@@ -1,11 +1,11 @@
 import { useState, useEffect } from 'react'
 import { useParams, useNavigate, Link } from 'react-router-dom'
 import {
-  Clock, Users, Tag, Pencil, Trash2, Languages, ArrowLeft, Loader2,
-  Flame, ChefHat, Zap, Wheat, Droplets,
+  Clock, Users, Tag, Pencil, Trash2, ArrowLeft, Loader2,
+  Flame, Zap, Wheat, Droplets, Brain, Sparkles, MessageCircle,
 } from 'lucide-react'
 import toast from 'react-hot-toast'
-import { getRecipe, deleteRecipe, translateRecipe } from '../api'
+import { getRecipe, deleteRecipe, analyzeRecipe } from '../api'
 
 const CATEGORY_COLORS = {
   breakfast: 'bg-amber-100 text-amber-800',
@@ -15,26 +15,21 @@ const CATEGORY_COLORS = {
   dessert:   'bg-pink-100 text-pink-800',
 }
 
-const LANGUAGES = [
-  { code: 'es', label: 'Spanish' },
-  { code: 'fr', label: 'French' },
-  { code: 'de', label: 'German' },
-  { code: 'it', label: 'Italian' },
-  { code: 'pt', label: 'Portuguese' },
-  { code: 'ja', label: 'Japanese' },
-  { code: 'zh', label: 'Chinese' },
-  { code: 'hi', label: 'Hindi' },
-  { code: 'ar', label: 'Arabic' },
-  { code: 'ko', label: 'Korean' },
-]
-
 const PLACEHOLDER_GRADIENTS = [
   'from-amber-300 via-orange-300 to-rose-300',
   'from-emerald-300 via-teal-300 to-cyan-300',
   'from-rose-300 via-pink-300 to-fuchsia-300',
 ]
 
-// Simple client-side nutrition estimation (mirrors the library logic)
+const SENTIMENT_CONFIG = {
+  POSITIVE: { label: 'Positive', color: 'text-emerald-700 bg-emerald-50', icon: '😊' },
+  NEGATIVE: { label: 'Negative', color: 'text-red-700 bg-red-50', icon: '😟' },
+  NEUTRAL:  { label: 'Neutral', color: 'text-stone-700 bg-stone-50', icon: '😐' },
+  MIXED:    { label: 'Mixed', color: 'text-amber-700 bg-amber-50', icon: '🤔' },
+  UNKNOWN:  { label: 'Unknown', color: 'text-stone-500 bg-stone-50', icon: '❓' },
+}
+
+// Simple client-side nutrition estimation
 const NUTRITION_DB = {
   flour: [364,10,76,1], sugar: [387,0,100,0], butter: [717,1,0,81], egg: [155,13,1,11], eggs: [155,13,1,11],
   milk: [42,3,5,1], rice: [130,3,28,0], pasta: [131,5,25,1], chicken: [239,27,0,14], beef: [250,26,0,15],
@@ -77,22 +72,17 @@ export default function RecipeDetail() {
   const [recipe, setRecipe] = useState(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
-
-  // Ingredient checkboxes
   const [checked, setChecked] = useState({})
 
-  // Translation
-  const [targetLang, setTargetLang] = useState('es')
-  const [translating, setTranslating] = useState(false)
-  const [translation, setTranslation] = useState(null)
+  // Comprehend analysis
+  const [analyzing, setAnalyzing] = useState(false)
+  const [insights, setInsights] = useState(null)
 
   // Delete modal
   const [showDelete, setShowDelete] = useState(false)
   const [deleting, setDeleting] = useState(false)
 
-  useEffect(() => {
-    loadRecipe()
-  }, [id])
+  useEffect(() => { loadRecipe() }, [id])
 
   async function loadRecipe() {
     setLoading(true)
@@ -108,17 +98,17 @@ export default function RecipeDetail() {
     }
   }
 
-  async function handleTranslate() {
-    setTranslating(true)
+  async function handleAnalyze() {
+    setAnalyzing(true)
     try {
-      const result = await translateRecipe(id, targetLang)
-      setTranslation(result)
-      toast.success('Translation complete')
+      const result = await analyzeRecipe(id)
+      setInsights(result)
+      toast.success('Analysis complete')
     } catch (err) {
-      toast.error('Translation failed')
+      toast.error('Analysis failed')
       console.error(err)
     } finally {
-      setTranslating(false)
+      setAnalyzing(false)
     }
   }
 
@@ -136,9 +126,6 @@ export default function RecipeDetail() {
     }
   }
 
-  // ---------------------------------------------------------------
-  // Loading / Error states
-  // ---------------------------------------------------------------
   if (loading) {
     return (
       <div className="max-w-4xl mx-auto px-4 py-10 space-y-6">
@@ -159,9 +146,6 @@ export default function RecipeDetail() {
     )
   }
 
-  // ---------------------------------------------------------------
-  // Data extraction
-  // ---------------------------------------------------------------
   const category = (recipe.cuisine || recipe.category || '').toLowerCase()
   const badgeClass = CATEGORY_COLORS[category] || 'bg-stone-100 text-stone-700'
   const prepTime = Number(recipe.prepTime || recipe.prep_time || 0)
@@ -179,12 +163,11 @@ export default function RecipeDetail() {
 
   return (
     <div className="max-w-4xl mx-auto px-4 py-8">
-      {/* Back link */}
       <Link to="/" className="inline-flex items-center gap-1.5 text-sm text-stone-400 hover:text-stone-600 transition mb-6">
         <ArrowLeft className="w-4 h-4" /> Back to recipes
       </Link>
 
-      {/* ---- Hero image ---- */}
+      {/* Hero image */}
       <div className="rounded-2xl overflow-hidden h-64 sm:h-80 mb-8 shadow-md shadow-orange-100/40">
         {imageUrl ? (
           <img src={imageUrl} alt={recipe.title} className="w-full h-full object-cover" />
@@ -195,7 +178,7 @@ export default function RecipeDetail() {
         )}
       </div>
 
-      {/* ---- Header ---- */}
+      {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4 mb-8">
         <div>
           {category && (
@@ -207,51 +190,25 @@ export default function RecipeDetail() {
           {recipe.description && (
             <p className="mt-3 text-stone-500 leading-relaxed max-w-2xl">{recipe.description}</p>
           )}
-
-          {/* Meta row */}
           <div className="flex flex-wrap items-center gap-5 mt-4 text-sm text-stone-400">
-            {prepTime > 0 && (
-              <span className="flex items-center gap-1.5">
-                <Clock className="w-4 h-4 text-orange-400" /> Prep: {prepTime} min
-              </span>
-            )}
-            {cookTime > 0 && (
-              <span className="flex items-center gap-1.5">
-                <Flame className="w-4 h-4 text-orange-400" /> Cook: {cookTime} min
-              </span>
-            )}
-            {totalTime > 0 && (
-              <span className="flex items-center gap-1.5">
-                <Zap className="w-4 h-4 text-orange-400" /> Total: {totalTime} min
-              </span>
-            )}
-            {servings > 0 && (
-              <span className="flex items-center gap-1.5">
-                <Users className="w-4 h-4 text-orange-400" /> {servings} servings
-              </span>
-            )}
+            {prepTime > 0 && <span className="flex items-center gap-1.5"><Clock className="w-4 h-4 text-orange-400" /> Prep: {prepTime} min</span>}
+            {cookTime > 0 && <span className="flex items-center gap-1.5"><Flame className="w-4 h-4 text-orange-400" /> Cook: {cookTime} min</span>}
+            {totalTime > 0 && <span className="flex items-center gap-1.5"><Zap className="w-4 h-4 text-orange-400" /> Total: {totalTime} min</span>}
+            {servings > 0 && <span className="flex items-center gap-1.5"><Users className="w-4 h-4 text-orange-400" /> {servings} servings</span>}
           </div>
         </div>
-
-        {/* Action buttons */}
         <div className="flex items-center gap-2 flex-shrink-0">
-          <Link
-            to={`/edit/${id}`}
-            className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl border border-stone-200 text-sm font-medium text-stone-600 hover:bg-stone-50 transition"
-          >
+          <Link to={`/edit/${id}`} className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl border border-stone-200 text-sm font-medium text-stone-600 hover:bg-stone-50 transition">
             <Pencil className="w-4 h-4" /> Edit
           </Link>
-          <button
-            onClick={() => setShowDelete(true)}
-            className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl border border-red-200 text-sm font-medium text-red-600 hover:bg-red-50 transition"
-          >
+          <button onClick={() => setShowDelete(true)} className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl border border-red-200 text-sm font-medium text-red-600 hover:bg-red-50 transition">
             <Trash2 className="w-4 h-4" /> Delete
           </button>
         </div>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-        {/* ---- Left column ---- */}
+        {/* Left column */}
         <div className="lg:col-span-2 space-y-8">
           {/* Ingredients */}
           {ingredients.length > 0 && (
@@ -260,12 +217,7 @@ export default function RecipeDetail() {
               <ul className="space-y-2.5">
                 {ingredients.map((ing, i) => (
                   <li key={i} className="flex items-center gap-3">
-                    <input
-                      type="checkbox"
-                      checked={checked[i] || false}
-                      onChange={() => setChecked(prev => ({ ...prev, [i]: !prev[i] }))}
-                      className="ingredient-check"
-                    />
+                    <input type="checkbox" checked={checked[i] || false} onChange={() => setChecked(prev => ({ ...prev, [i]: !prev[i] }))} className="ingredient-check" />
                     <span className={`text-sm transition-all duration-200 ${checked[i] ? 'line-through text-stone-300' : 'text-stone-700'}`}>
                       <strong className="font-medium">{ing.quantity} {ing.unit}</strong> {ing.name}
                     </span>
@@ -282,9 +234,7 @@ export default function RecipeDetail() {
               <ol className="space-y-4">
                 {steps.map((step, i) => (
                   <li key={i} className="flex gap-3">
-                    <span className="w-7 h-7 rounded-full bg-orange-100 text-orange-700 text-xs font-bold flex items-center justify-center flex-shrink-0 mt-0.5">
-                      {i + 1}
-                    </span>
+                    <span className="w-7 h-7 rounded-full bg-orange-100 text-orange-700 text-xs font-bold flex items-center justify-center flex-shrink-0 mt-0.5">{i + 1}</span>
                     <p className="text-sm text-stone-600 leading-relaxed">{step}</p>
                   </li>
                 ))}
@@ -292,47 +242,75 @@ export default function RecipeDetail() {
             </section>
           )}
 
-          {/* Translation */}
+          {/* AI Insights (Comprehend) */}
           <section className="bg-white rounded-2xl border border-stone-100 shadow-sm shadow-orange-50/60 p-6">
             <h2 className="font-display text-xl font-semibold text-stone-800 mb-4 flex items-center gap-2">
-              <Languages className="w-5 h-5 text-orange-500" /> Translate
+              <Brain className="w-5 h-5 text-orange-500" /> AI Recipe Insights
             </h2>
-            <div className="flex flex-wrap items-center gap-3">
-              <select
-                value={targetLang}
-                onChange={e => setTargetLang(e.target.value)}
-                className="rounded-xl border border-stone-200 bg-white px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-orange-300 transition"
-              >
-                {LANGUAGES.map(l => (
-                  <option key={l.code} value={l.code}>{l.label}</option>
-                ))}
-              </select>
-              <button
-                onClick={handleTranslate}
-                disabled={translating}
-                className="inline-flex items-center gap-2 px-5 py-2 rounded-xl bg-gradient-to-r from-orange-500 to-orange-600 text-white text-sm font-medium hover:from-orange-600 hover:to-orange-700 disabled:opacity-40 transition shadow-sm shadow-orange-200/60"
-              >
-                {translating ? <Loader2 className="w-4 h-4 animate-spin" /> : <Languages className="w-4 h-4" />}
-                Translate
-              </button>
-            </div>
+            <p className="text-sm text-stone-400 mb-4">
+              Use Amazon Comprehend to extract key phrases, detect sentiment, and identify entities from your recipe.
+            </p>
+            <button
+              onClick={handleAnalyze}
+              disabled={analyzing}
+              className="inline-flex items-center gap-2 px-5 py-2 rounded-xl bg-gradient-to-r from-orange-500 to-orange-600 text-white text-sm font-medium hover:from-orange-600 hover:to-orange-700 disabled:opacity-40 transition shadow-sm shadow-orange-200/60"
+            >
+              {analyzing ? <Loader2 className="w-4 h-4 animate-spin" /> : <Sparkles className="w-4 h-4" />}
+              {analyzing ? 'Analyzing...' : insights ? 'Re-analyze' : 'Analyze Recipe'}
+            </button>
 
-            {translation && (
-              <div className="mt-5 space-y-3 border-t border-stone-100 pt-4">
-                <div>
-                  <p className="text-xs font-medium text-stone-400 mb-1">Title</p>
-                  <p className="text-sm text-stone-700 font-medium">{translation.title}</p>
-                </div>
-                {translation.description && (
+            {insights && (
+              <div className="mt-6 space-y-5 border-t border-stone-100 pt-5">
+                {/* Sentiment */}
+                {insights.sentiment?.overall && (
                   <div>
-                    <p className="text-xs font-medium text-stone-400 mb-1">Description</p>
-                    <p className="text-sm text-stone-600">{translation.description}</p>
+                    <p className="text-xs font-semibold text-stone-500 uppercase tracking-wide mb-2 flex items-center gap-1.5">
+                      <MessageCircle className="w-3.5 h-3.5" /> Sentiment
+                    </p>
+                    <div className="flex items-center gap-3">
+                      <span className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-sm font-semibold ${SENTIMENT_CONFIG[insights.sentiment.overall]?.color || 'bg-stone-50 text-stone-600'}`}>
+                        {SENTIMENT_CONFIG[insights.sentiment.overall]?.icon} {SENTIMENT_CONFIG[insights.sentiment.overall]?.label}
+                      </span>
+                      {insights.sentiment.scores && (
+                        <div className="flex gap-3 text-xs text-stone-400">
+                          <span>Positive: {insights.sentiment.scores.positive}%</span>
+                          <span>Neutral: {insights.sentiment.scores.neutral}%</span>
+                        </div>
+                      )}
+                    </div>
                   </div>
                 )}
-                {translation.instructions && (
+
+                {/* Key Phrases */}
+                {insights.keyPhrases?.length > 0 && (
                   <div>
-                    <p className="text-xs font-medium text-stone-400 mb-1">Instructions</p>
-                    <p className="text-sm text-stone-600 whitespace-pre-line">{translation.instructions}</p>
+                    <p className="text-xs font-semibold text-stone-500 uppercase tracking-wide mb-2 flex items-center gap-1.5">
+                      <Sparkles className="w-3.5 h-3.5" /> Key Phrases
+                    </p>
+                    <div className="flex flex-wrap gap-2">
+                      {insights.keyPhrases.map((kp, i) => (
+                        <span key={i} className="px-2.5 py-1 bg-orange-50 text-orange-700 rounded-full text-xs font-medium">
+                          {kp.text}
+                          <span className="ml-1 text-orange-400">{kp.confidence}%</span>
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Entities */}
+                {insights.entities?.length > 0 && (
+                  <div>
+                    <p className="text-xs font-semibold text-stone-500 uppercase tracking-wide mb-2 flex items-center gap-1.5">
+                      <Tag className="w-3.5 h-3.5" /> Entities Detected
+                    </p>
+                    <div className="flex flex-wrap gap-2">
+                      {insights.entities.map((ent, i) => (
+                        <span key={i} className="px-2.5 py-1 bg-violet-50 text-violet-700 rounded-full text-xs font-medium">
+                          {ent.text} <span className="text-violet-400">({ent.type})</span>
+                        </span>
+                      ))}
+                    </div>
                   </div>
                 )}
               </div>
@@ -340,7 +318,7 @@ export default function RecipeDetail() {
           </section>
         </div>
 
-        {/* ---- Right column (sidebar) ---- */}
+        {/* Right column (sidebar) */}
         <div className="space-y-6">
           {/* Nutrition estimate */}
           {ingredients.length > 0 && (
@@ -391,7 +369,7 @@ export default function RecipeDetail() {
         </div>
       </div>
 
-      {/* ---- Delete confirmation modal ---- */}
+      {/* Delete confirmation modal */}
       {showDelete && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm px-4">
           <div className="bg-white rounded-2xl shadow-xl max-w-sm w-full p-6 space-y-4">
@@ -400,17 +378,10 @@ export default function RecipeDetail() {
               This will permanently remove <strong>{recipe.title}</strong>. This action cannot be undone.
             </p>
             <div className="flex items-center gap-3 pt-2">
-              <button
-                onClick={handleDelete}
-                disabled={deleting}
-                className="flex-1 py-2.5 rounded-xl bg-red-600 text-white text-sm font-medium hover:bg-red-700 disabled:opacity-50 transition"
-              >
+              <button onClick={handleDelete} disabled={deleting} className="flex-1 py-2.5 rounded-xl bg-red-600 text-white text-sm font-medium hover:bg-red-700 disabled:opacity-50 transition">
                 {deleting ? 'Deleting...' : 'Yes, delete'}
               </button>
-              <button
-                onClick={() => setShowDelete(false)}
-                className="flex-1 py-2.5 rounded-xl border border-stone-200 text-stone-600 text-sm font-medium hover:bg-stone-50 transition"
-              >
+              <button onClick={() => setShowDelete(false)} className="flex-1 py-2.5 rounded-xl border border-stone-200 text-stone-600 text-sm font-medium hover:bg-stone-50 transition">
                 Cancel
               </button>
             </div>

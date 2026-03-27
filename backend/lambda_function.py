@@ -3,7 +3,7 @@ CloudChef Recipe Manager - Lambda Function
 ==========================================
 Single Lambda function handling all API routes via API Gateway REST API.
 Manages recipes in DynamoDB with S3 image storage, Rekognition image analysis,
-and AWS Translate for multilingual recipe support.
+and AWS Comprehend for NLP insights on recipes.
 
 Region: eu-west-1
 """
@@ -32,7 +32,7 @@ dynamodb = boto3.resource('dynamodb', region_name=REGION)
 table = dynamodb.Table(DYNAMODB_TABLE)
 s3 = boto3.client('s3', region_name=REGION)
 rekognition = boto3.client('rekognition', region_name=REGION)
-translate = boto3.client('translate', region_name=REGION)
+comprehend = boto3.client('comprehend', region_name=REGION)
 
 # ---------------------------------------------------------------------------
 # CORS headers - attached to every response so the frontend can call the API
@@ -53,7 +53,7 @@ def build_response(status_code, body):
     return {
         'statusCode': status_code,
         'headers': CORS_HEADERS,
-        'body': json.dumps(body, default=str)  # default=str handles datetime serialisation
+        'body': json.dumps(body, default=str)
     }
 
 
@@ -83,10 +83,7 @@ def parse_body(event):
 
 
 def upload_image_to_s3(image_base64, image_key):
-    """
-    Decode a base64 image string and upload it to S3.
-    Returns the S3 key on success or None on failure.
-    """
+    """Decode a base64 image string and upload it to S3."""
     try:
         image_bytes = base64.b64decode(image_base64)
         s3.put_object(
@@ -96,7 +93,7 @@ def upload_image_to_s3(image_base64, image_key):
             ContentType='image/jpeg'
         )
         return image_key
-    except (ClientError, Exception) as e:
+    except Exception as e:
         print(f'[ERROR] Failed to upload image to S3: {e}')
         return None
 
@@ -110,10 +107,7 @@ def delete_image_from_s3(image_key):
 
 
 def detect_labels_from_s3(image_key):
-    """
-    Run Rekognition detect_labels on an image stored in S3.
-    Returns a list of label dicts with Name and Confidence.
-    """
+    """Run Rekognition detect_labels on an image stored in S3."""
     try:
         response = rekognition.detect_labels(
             Image={'S3Object': {'Bucket': S3_BUCKET, 'Name': image_key}},
@@ -130,24 +124,6 @@ def detect_labels_from_s3(image_key):
         return []
 
 
-def translate_text(text, target_language):
-    """Translate a string from auto-detected source to the target language."""
-    if not text:
-        return text
-    try:
-        # Split long text into chunks if needed (Translate has a 10KB limit)
-        response = translate.translate_text(
-            Text=text[:5000],
-            SourceLanguageCode='en',
-            TargetLanguageCode=target_language
-        )
-        print(f'[INFO] Translated to {target_language}: {response["TranslatedText"][:50]}...')
-        return response['TranslatedText']
-    except Exception as e:
-        print(f'[ERROR] Translate failed: {type(e).__name__}: {e}')
-        return text  # Return original text on failure
-
-
 # ===========================================================================
 # Route handlers
 # ===========================================================================
@@ -157,12 +133,9 @@ def get_all_recipes():
     try:
         response = table.scan()
         recipes = response.get('Items', [])
-
-        # Handle pagination if the table has more items than one scan returns
         while 'LastEvaluatedKey' in response:
             response = table.scan(ExclusiveStartKey=response['LastEvaluatedKey'])
             recipes.extend(response.get('Items', []))
-
         return build_response(200, {'recipes': recipes})
     except ClientError as e:
         print(f'[ERROR] DynamoDB scan failed: {e}')
@@ -170,20 +143,14 @@ def get_all_recipes():
 
 
 def create_recipe(event):
-    """
-    POST /recipes - Create a new recipe in DynamoDB.
-    If an image (base64) is provided, upload to S3 and run Rekognition.
-    """
+    """POST /recipes - Create a new recipe in DynamoDB."""
     body = parse_body(event)
-
-    # Validate required fields
     if not body.get('title'):
         return build_response(400, {'error': 'Recipe title is required'})
 
     recipe_id = str(uuid.uuid4())
     now = datetime.now(timezone.utc).isoformat()
 
-    # Build the recipe item
     recipe = {
         'recipeId': recipe_id,
         'title': body.get('title', ''),
@@ -207,12 +174,9 @@ def create_recipe(event):
         if uploaded_key:
             recipe['imageKey'] = uploaded_key
             recipe['imageUrl'] = f'https://{S3_BUCKET}.s3.{REGION}.amazonaws.com/{uploaded_key}'
-
-            # Run Rekognition to detect labels in the uploaded image
             labels = detect_labels_from_s3(uploaded_key)
             recipe['detectedLabels'] = labels
 
-    # Write recipe to DynamoDB
     try:
         table.put_item(Item=recipe)
         return build_response(201, {'recipe': recipe})
@@ -235,15 +199,11 @@ def get_recipe(recipe_id):
 
 
 def update_recipe(recipe_id, event):
-    """
-    PUT /recipes/{id} - Update specified fields of an existing recipe.
-    Only fields present in the request body are updated.
-    """
+    """PUT /recipes/{id} - Update specified fields of an existing recipe."""
     body = parse_body(event)
     if not body:
         return build_response(400, {'error': 'Request body is empty'})
 
-    # Check the recipe exists first
     try:
         existing = table.get_item(Key={'recipeId': recipe_id})
         if 'Item' not in existing:
@@ -252,8 +212,6 @@ def update_recipe(recipe_id, event):
         print(f'[ERROR] DynamoDB get_item failed: {e}')
         return build_response(500, {'error': 'Failed to fetch recipe for update'})
 
-    # Build the update expression dynamically from the provided fields
-    # Exclude recipeId and createdAt from being overwritten
     protected_fields = {'recipeId', 'createdAt'}
     body['updatedAt'] = datetime.now(timezone.utc).isoformat()
 
@@ -264,7 +222,6 @@ def update_recipe(recipe_id, event):
     for key, value in body.items():
         if key in protected_fields:
             continue
-        # Use expression attribute names to avoid reserved-word conflicts
         attr_name = f'#f_{key}'
         attr_value = f':v_{key}'
         update_parts.append(f'{attr_name} = {attr_value}')
@@ -291,11 +248,7 @@ def update_recipe(recipe_id, event):
 
 
 def delete_recipe(recipe_id):
-    """
-    DELETE /recipes/{id} - Delete a recipe from DynamoDB.
-    Also removes the associated S3 image if one exists.
-    """
-    # Fetch the recipe first to check for an image key
+    """DELETE /recipes/{id} - Delete a recipe and its S3 image."""
     try:
         response = table.get_item(Key={'recipeId': recipe_id})
         recipe = response.get('Item')
@@ -305,12 +258,10 @@ def delete_recipe(recipe_id):
         print(f'[ERROR] DynamoDB get_item failed: {e}')
         return build_response(500, {'error': 'Failed to fetch recipe for deletion'})
 
-    # Delete the S3 image if it exists
     image_key = recipe.get('imageKey')
     if image_key:
         delete_image_from_s3(image_key)
 
-    # Delete the recipe from DynamoDB
     try:
         table.delete_item(Key={'recipeId': recipe_id})
         return build_response(200, {'message': 'Recipe deleted successfully', 'recipeId': recipe_id})
@@ -319,16 +270,12 @@ def delete_recipe(recipe_id):
         return build_response(500, {'error': 'Failed to delete recipe'})
 
 
-def translate_recipe(recipe_id, event):
+def analyze_recipe_text(recipe_id, event):
     """
-    POST /recipes/{id}/translate - Translate a recipe's title, description,
-    and instructions into the requested target language.
+    POST /recipes/{id}/analyze - Use AWS Comprehend to extract key phrases,
+    detect sentiment, and identify entities from the recipe text.
+    Returns NLP insights about the recipe.
     """
-    body = parse_body(event)
-    target_language = body.get('targetLanguage')
-    if not target_language:
-        return build_response(400, {'error': 'targetLanguage is required (e.g. "es", "fr", "de")'})
-
     # Fetch the recipe
     try:
         response = table.get_item(Key={'recipeId': recipe_id})
@@ -337,74 +284,87 @@ def translate_recipe(recipe_id, event):
             return build_response(404, {'error': 'Recipe not found'})
     except ClientError as e:
         print(f'[ERROR] DynamoDB get_item failed: {e}')
-        return build_response(500, {'error': 'Failed to fetch recipe for translation'})
+        return build_response(500, {'error': 'Failed to fetch recipe'})
 
-    # Translate the three text fields
-    errors = []
-    translated_title = recipe.get('title', '')
-    translated_desc = recipe.get('description', '')
-    translated_instr = recipe.get('instructions', '')
+    # Combine recipe text for analysis
+    text = f"{recipe.get('title', '')}. {recipe.get('description', '')}. {recipe.get('instructions', '')}"
+    text = text[:4500]  # Comprehend has a 5KB limit per request
 
-    try:
-        resp = translate.translate_text(
-            Text=str(recipe.get('title', 'test')),
-            SourceLanguageCode='en',
-            TargetLanguageCode=target_language
-        )
-        translated_title = resp['TranslatedText']
-    except Exception as e:
-        errors.append(f'title: {type(e).__name__}: {str(e)}')
-
-    try:
-        resp = translate.translate_text(
-            Text=str(recipe.get('description', 'test')),
-            SourceLanguageCode='en',
-            TargetLanguageCode=target_language
-        )
-        translated_desc = resp['TranslatedText']
-    except Exception as e:
-        errors.append(f'desc: {type(e).__name__}: {str(e)}')
-
-    try:
-        resp = translate.translate_text(
-            Text=str(recipe.get('instructions', 'test')),
-            SourceLanguageCode='en',
-            TargetLanguageCode=target_language
-        )
-        translated_instr = resp['TranslatedText']
-    except Exception as e:
-        errors.append(f'instr: {type(e).__name__}: {str(e)}')
-
-    translated = {
+    insights = {
         'recipeId': recipe_id,
-        'targetLanguage': target_language,
-        'title': translated_title,
-        'description': translated_desc,
-        'instructions': translated_instr,
+        'keyPhrases': [],
+        'sentiment': {},
+        'entities': []
     }
-    if errors:
-        translated['errors'] = errors
 
-    return build_response(200, {'translated': translated})
+    # Detect key phrases (e.g., "fresh mozzarella", "olive oil", "golden crust")
+    try:
+        kp_response = comprehend.detect_key_phrases(Text=text, LanguageCode='en')
+        phrases = kp_response.get('KeyPhrases', [])
+        # Deduplicate and sort by confidence
+        seen = set()
+        for p in sorted(phrases, key=lambda x: x['Score'], reverse=True):
+            phrase_lower = p['Text'].lower().strip()
+            if phrase_lower not in seen and len(phrase_lower) > 2:
+                seen.add(phrase_lower)
+                insights['keyPhrases'].append({
+                    'text': p['Text'],
+                    'confidence': round(p['Score'] * 100, 1)
+                })
+        insights['keyPhrases'] = insights['keyPhrases'][:20]  # Top 20
+    except Exception as e:
+        print(f'[ERROR] Comprehend detect_key_phrases failed: {e}')
+        insights['keyPhrases'] = []
+
+    # Detect sentiment (positive, negative, neutral, mixed)
+    try:
+        sent_response = comprehend.detect_sentiment(Text=text, LanguageCode='en')
+        insights['sentiment'] = {
+            'overall': sent_response.get('Sentiment', 'UNKNOWN'),
+            'scores': {
+                'positive': round(sent_response['SentimentScore'].get('Positive', 0) * 100, 1),
+                'negative': round(sent_response['SentimentScore'].get('Negative', 0) * 100, 1),
+                'neutral': round(sent_response['SentimentScore'].get('Neutral', 0) * 100, 1),
+                'mixed': round(sent_response['SentimentScore'].get('Mixed', 0) * 100, 1)
+            }
+        }
+    except Exception as e:
+        print(f'[ERROR] Comprehend detect_sentiment failed: {e}')
+        insights['sentiment'] = {'overall': 'UNKNOWN', 'scores': {}}
+
+    # Detect entities (food items, quantities, locations, etc.)
+    try:
+        ent_response = comprehend.detect_entities(Text=text, LanguageCode='en')
+        seen_ents = set()
+        for ent in ent_response.get('Entities', []):
+            ent_key = f"{ent['Text'].lower()}_{ent['Type']}"
+            if ent_key not in seen_ents:
+                seen_ents.add(ent_key)
+                insights['entities'].append({
+                    'text': ent['Text'],
+                    'type': ent['Type'],
+                    'confidence': round(ent['Score'] * 100, 1)
+                })
+        insights['entities'] = insights['entities'][:15]
+    except Exception as e:
+        print(f'[ERROR] Comprehend detect_entities failed: {e}')
+        insights['entities'] = []
+
+    return build_response(200, {'insights': insights})
 
 
 def analyze_image(event):
-    """
-    POST /recipes/analyze-image - Upload a base64 image to S3 and run
-    Rekognition detect_labels. Returns the detected labels.
-    """
+    """POST /recipes/analyze-image - Upload image to S3 and run Rekognition."""
     body = parse_body(event)
     image_base64 = body.get('image')
     if not image_base64:
         return build_response(400, {'error': 'image (base64 string) is required'})
 
-    # Upload to S3 under a temporary analysis key
     image_key = f'analysis/{uuid.uuid4()}.jpg'
     uploaded_key = upload_image_to_s3(image_base64, image_key)
     if not uploaded_key:
         return build_response(500, {'error': 'Failed to upload image for analysis'})
 
-    # Run Rekognition
     labels = detect_labels_from_s3(uploaded_key)
 
     return build_response(200, {
@@ -419,48 +379,31 @@ def analyze_image(event):
 # ===========================================================================
 
 def lambda_handler(event, context):
-    """
-    Entry point for AWS Lambda. Routes incoming API Gateway requests
-    based on HTTP method and path to the appropriate handler.
-    """
+    """Entry point for AWS Lambda. Routes API Gateway requests to handlers."""
     print(f'[INFO] Received event: {json.dumps(event)}')
 
     http_method = event.get('httpMethod', '')
     path = event.get('path', '')
     path_parameters = event.get('pathParameters') or {}
 
-    # -----------------------------------------------------------------------
-    # Handle CORS preflight requests (OPTIONS)
-    # -----------------------------------------------------------------------
+    # Handle CORS preflight
     if http_method == 'OPTIONS':
         return build_response(200, {'message': 'CORS preflight OK'})
 
-    # -----------------------------------------------------------------------
-    # Route: POST /recipes/analyze-image
-    # Must be checked before the generic /recipes/{id} routes
-    # -----------------------------------------------------------------------
+    # Route: POST /recipes/analyze-image (must be before /recipes/{id})
     if http_method == 'POST' and path == '/recipes/analyze-image':
         return analyze_image(event)
 
-    # -----------------------------------------------------------------------
-    # Route: GET /recipes - list all recipes
-    # -----------------------------------------------------------------------
+    # Route: GET /recipes
     if http_method == 'GET' and path == '/recipes':
         return get_all_recipes()
 
-    # -----------------------------------------------------------------------
-    # Route: POST /recipes - create a new recipe
-    # -----------------------------------------------------------------------
+    # Route: POST /recipes
     if http_method == 'POST' and path == '/recipes':
         return create_recipe(event)
 
-    # -----------------------------------------------------------------------
-    # Routes that require a recipe ID from the path
-    # Expected paths: /recipes/{id} or /recipes/{id}/translate
-    # -----------------------------------------------------------------------
+    # Routes that require a recipe ID
     recipe_id = path_parameters.get('id')
-
-    # Fallback: parse recipe ID from the path if pathParameters is missing
     if not recipe_id:
         parts = path.strip('/').split('/')
         if len(parts) >= 2 and parts[0] == 'recipes':
@@ -469,9 +412,9 @@ def lambda_handler(event, context):
     if not recipe_id:
         return build_response(400, {'error': 'Recipe ID is required'})
 
-    # Route: POST /recipes/{id}/translate
-    if http_method == 'POST' and path.endswith('/translate'):
-        return translate_recipe(recipe_id, event)
+    # Route: POST /recipes/{id}/analyze (Comprehend NLP)
+    if http_method == 'POST' and path.endswith('/analyze'):
+        return analyze_recipe_text(recipe_id, event)
 
     # Route: GET /recipes/{id}
     if http_method == 'GET':
@@ -485,11 +428,4 @@ def lambda_handler(event, context):
     if http_method == 'DELETE':
         return delete_recipe(recipe_id)
 
-    # -----------------------------------------------------------------------
-    # No matching route found
-    # -----------------------------------------------------------------------
-    return build_response(404, {
-        'error': 'Route not found',
-        'method': http_method,
-        'path': path
-    })
+    return build_response(404, {'error': 'Route not found', 'method': http_method, 'path': path})

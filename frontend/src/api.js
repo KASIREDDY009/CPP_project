@@ -38,12 +38,12 @@ export async function deleteRecipe(id) {
 }
 
 // ----------------------------------------------------------------
-// Translation
+// NLP Analysis (Comprehend)
 // ----------------------------------------------------------------
 
-export async function translateRecipe(id, targetLanguage) {
-  const { data } = await api.post(`/recipes/${id}/translate`, { targetLanguage })
-  return data.translated
+export async function analyzeRecipe(id) {
+  const { data } = await api.post(`/recipes/${id}/analyze`)
+  return data.insights
 }
 
 // ----------------------------------------------------------------

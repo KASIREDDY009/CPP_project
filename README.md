@@ -1,6 +1,6 @@
 # CloudChef - Smart Recipe Manager
 
-An AI-powered recipe management application that lets users create, discover, and share recipes with intelligent features like image recognition and multi-language translation.
+An AI-powered recipe management application that lets users create, discover, and share recipes with intelligent features like image recognition and NLP-powered recipe insights.
 
 ## Tech Stack
 
@@ -17,7 +17,7 @@ An AI-powered recipe management application that lets users create, discover, an
 | **DynamoDB** | Recipe data storage |
 | **S3** | Recipe image storage + frontend hosting |
 | **Amazon Rekognition** | Food image recognition |
-| **Amazon Translate** | Multi-language recipe translation |
+| **Amazon Comprehend** | NLP analysis - key phrases, sentiment, entities |
 
 ## Project Structure
 
