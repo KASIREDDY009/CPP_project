@@ -135,14 +135,16 @@ def translate_text(text, target_language):
     if not text:
         return text
     try:
+        # Split long text into chunks if needed (Translate has a 10KB limit)
         response = translate.translate_text(
-            Text=text,
-            SourceLanguageCode='auto',
+            Text=text[:5000],
+            SourceLanguageCode='en',
             TargetLanguageCode=target_language
         )
+        print(f'[INFO] Translated to {target_language}: {response["TranslatedText"][:50]}...')
         return response['TranslatedText']
-    except ClientError as e:
-        print(f'[ERROR] Translate failed for text: {e}')
+    except Exception as e:
+        print(f'[ERROR] Translate failed: {type(e).__name__}: {e}')
         return text  # Return original text on failure
 
 
