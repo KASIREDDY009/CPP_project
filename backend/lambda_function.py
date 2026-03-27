@@ -340,13 +340,50 @@ def translate_recipe(recipe_id, event):
         return build_response(500, {'error': 'Failed to fetch recipe for translation'})
 
     # Translate the three text fields
+    errors = []
+    translated_title = recipe.get('title', '')
+    translated_desc = recipe.get('description', '')
+    translated_instr = recipe.get('instructions', '')
+
+    try:
+        resp = translate.translate_text(
+            Text=str(recipe.get('title', 'test')),
+            SourceLanguageCode='en',
+            TargetLanguageCode=target_language
+        )
+        translated_title = resp['TranslatedText']
+    except Exception as e:
+        errors.append(f'title: {type(e).__name__}: {str(e)}')
+
+    try:
+        resp = translate.translate_text(
+            Text=str(recipe.get('description', 'test')),
+            SourceLanguageCode='en',
+            TargetLanguageCode=target_language
+        )
+        translated_desc = resp['TranslatedText']
+    except Exception as e:
+        errors.append(f'desc: {type(e).__name__}: {str(e)}')
+
+    try:
+        resp = translate.translate_text(
+            Text=str(recipe.get('instructions', 'test')),
+            SourceLanguageCode='en',
+            TargetLanguageCode=target_language
+        )
+        translated_instr = resp['TranslatedText']
+    except Exception as e:
+        errors.append(f'instr: {type(e).__name__}: {str(e)}')
+
     translated = {
         'recipeId': recipe_id,
         'targetLanguage': target_language,
-        'title': translate_text(recipe.get('title', ''), target_language),
-        'description': translate_text(recipe.get('description', ''), target_language),
-        'instructions': translate_text(recipe.get('instructions', ''), target_language)
+        'title': translated_title,
+        'description': translated_desc,
+        'instructions': translated_instr,
     }
+    if errors:
+        translated['errors'] = errors
 
     return build_response(200, {'translated': translated})
 
