@@ -1,0 +1,327 @@
+\documentclass[conference]{IEEEtran}
+\IEEEoverridecommandlockouts
+
+\usepackage{cite}
+\usepackage{amsmath,amssymb,amsfonts}
+\usepackage{graphicx}
+\usepackage{textcomp}
+\usepackage{xcolor}
+\usepackage{listings}
+\usepackage{url}
+\usepackage{hyperref}
+\usepackage{float}
+\usepackage{booktabs}
+\usepackage{tabularx}
+
+% Code listing style
+\lstdefinestyle{codestyle}{
+    backgroundcolor=\color{gray!10},
+    basicstyle=\ttfamily\scriptsize,
+    breaklines=true,
+    frame=single,
+    numbers=left,
+    numberstyle=\tiny\color{gray},
+    keywordstyle=\color{blue},
+    commentstyle=\color{green!50!black},
+    stringstyle=\color{red!70!black},
+    showstringspaces=false,
+    tabsize=2
+}
+\lstset{style=codestyle}
+
+\def\BibTeX{{\rm B\kern-.05em{\sc i\kern-.025em b}\kern-.08em
+    T\kern-.1667em\lower.7ex\hbox{E}\kern-.125emX}}
+
+\begin{document}
+
+\title{CloudChef: A Serverless Cloud-Based Smart Recipe Management Application on AWS}
+
+\author{\IEEEauthorblockN{Kasi Reddy}
+\IEEEauthorblockA{Student ID: x00000000 \\
+MSc in Cloud Computing \\
+National College of Ireland, Dublin \\
+kasireddy9424@gmail.com}}
+
+\maketitle
+
+% ============================================================
+% ABSTRACT
+% ============================================================
+\begin{abstract}
+This paper presents the design, implementation, and deployment of CloudChef, a serverless cloud-based recipe management application hosted on Amazon Web Services. The application enables users to create, browse, update, and delete recipes through an intuitive web interface, with advanced features including automated food image recognition and email-based notification subscriptions for new recipe alerts. The system leverages six AWS services programmatically, namely AWS Lambda for serverless compute, Amazon DynamoDB for NoSQL data storage, Amazon API Gateway for RESTful endpoint routing, Amazon S3 for image storage and static website hosting, Amazon Rekognition for intelligent food image label detection, and Amazon Simple Notification Service for recipe update email notifications. A custom object-oriented Python library called recipe-manager-nci was developed and published to the Python Package Index, providing recipe validation, nutrition estimation, meal planning, and recipe formatting utilities. The application follows a fully serverless architecture pattern, eliminating the need for server provisioning and enabling automatic scaling. A comprehensive CI/CD pipeline implemented through GitHub Actions automates testing, infrastructure provisioning, and deployment across all three application tiers. The results demonstrate that serverless cloud services can be effectively orchestrated to deliver a responsive, cost-efficient, and scalable web application with intelligent features.
+\end{abstract}
+
+% ============================================================
+% INTRODUCTION
+% ============================================================
+\section{Introduction}
+
+The proliferation of digital technology has transformed how individuals discover, store, and share culinary recipes. Traditional methods of maintaining physical recipe books or bookmarking disparate websites present significant challenges in terms of organisation, accessibility, and collaboration \cite{cloudpatterns}. Cloud computing offers a compelling solution to these challenges by providing on-demand storage, intelligent processing capabilities, and global accessibility through web-based interfaces.
+
+The motivation for this project arises from the observation that existing recipe management solutions either lack intelligent features such as automated food recognition, or require expensive infrastructure that limits their accessibility to individual users and small communities. By leveraging the serverless computing paradigm available on AWS, this project demonstrates that a feature-rich application can be developed and deployed without the overhead of managing servers, databases, or networking infrastructure \cite{serverless}.
+
+The primary objectives of this project are threefold. First, to design and implement a fully serverless recipe management application that supports complete CRUD operations with image upload capabilities. Second, to integrate intelligent cloud services including Amazon Rekognition for automated food image analysis and Amazon SNS for real-time email notifications when new recipes are published. Third, to develop a reusable Python library that encapsulates recipe-related domain logic including nutritional estimation, input validation, and meal planning algorithms. The application employs six AWS services programmatically and demonstrates cloud-native architectural patterns including event-driven processing, infrastructure as code, and continuous deployment.
+
+% ============================================================
+% PROJECT SPECIFICATION AND REQUIREMENTS
+% ============================================================
+\section{Project Specification and Requirements}
+
+\subsection{Functional Requirements}
+
+The application satisfies the following functional requirements. First, it provides complete CRUD operations for recipe management, allowing users to create new recipes with titles, descriptions, categories, ingredients, cooking instructions, preparation times, and serving sizes. Users can retrieve individual recipes or browse the entire collection with category-based filtering and text search capabilities. Recipes can be updated with modified information and deleted when no longer needed, with associated S3 images being automatically cleaned up during deletion.
+
+Second, the image management subsystem allows users to upload food photographs during recipe creation. Uploaded images are stored in Amazon S3 and can be analysed through Amazon Rekognition to automatically detect and label food items, cooking utensils, and other relevant objects present in the photograph. This intelligent labelling enhances recipe discoverability and provides users with automated metadata enrichment.
+
+Third, the notification subsystem enables users to subscribe to recipe update alerts by providing their email address. When new recipes are created or existing recipes are deleted, the system publishes notifications through Amazon SNS to all confirmed subscribers, keeping the community informed of collection changes.
+
+Fourth, the application provides a nutrition estimation feature powered by the custom recipe-manager-nci library, which calculates approximate calorie counts and macronutrient breakdowns based on recognised ingredient names and quantities.
+
+\subsection{Non-Functional Requirements}
+
+The non-functional requirements address scalability, availability, cost efficiency, and security. The serverless architecture inherently provides horizontal scalability, as AWS Lambda functions scale automatically in response to incoming request volume without manual intervention \cite{awslambda}. Availability is ensured through the managed nature of all six AWS services, each of which provides built-in redundancy and fault tolerance within the eu-west-1 (Ireland) region. Cost efficiency is achieved through the pay-per-use pricing model of Lambda, DynamoDB, and API Gateway, where charges accrue only for actual usage rather than provisioned capacity. Security is implemented through IAM role-based access control for the Lambda execution environment, CORS policies on API Gateway to restrict cross-origin access, and S3 bucket policies that enforce appropriate read and write permissions.
+
+% ============================================================
+% ARCHITECTURE AND DESIGN
+% ============================================================
+\section{Architecture and Design}
+
+CloudChef follows a serverless architecture pattern comprising three distinct tiers: a static frontend hosted on Amazon S3, a serverless API layer powered by AWS Lambda and Amazon API Gateway, and a data persistence layer using Amazon DynamoDB and Amazon S3 \cite{cloudpatterns}. This architecture was selected for its elimination of server management overhead, automatic scaling capabilities, and cost-optimised pay-per-use billing model.
+
+The frontend is a single-page React application built with Vite and styled using Tailwind CSS. In production, the compiled static assets are deployed to an S3 bucket configured for static website hosting, providing direct HTTP access without requiring a web server process. The React application communicates with the backend exclusively through RESTful API calls routed through Amazon API Gateway.
+
+The API layer consists of a single AWS Lambda function that receives all incoming HTTP requests through API Gateway's proxy integration. The Lambda function implements a routing mechanism that dispatches requests to the appropriate handler based on the HTTP method and URL path. This single-function approach was chosen over multiple individual Lambda functions to simplify deployment and reduce cold start overhead for infrequently accessed routes. The Lambda function integrates with four additional AWS services: DynamoDB for data persistence, S3 for image storage, Rekognition for image analysis, and SNS for notifications.
+
+The data layer uses Amazon DynamoDB as the primary data store, with recipes stored as individual items identified by a unique partition key (recipeId). DynamoDB was selected over relational alternatives because the recipe data model is self-contained without complex inter-entity relationships, and the NoSQL key-value access pattern aligns well with the application's primary query patterns of retrieving individual recipes or scanning the entire collection \cite{awsdynamodb}.
+
+% ============================================================
+% LIBRARY DESCRIPTION
+% ============================================================
+\section{Recipe Manager Library}
+
+The recipe-manager-nci library is a custom Python package developed specifically for this project to encapsulate the domain logic of recipe management operations. The library follows object-oriented design principles with six distinct classes organised across five modules, requiring no external dependencies beyond the Python standard library.
+
+The library provides the following primary components. The \texttt{Recipe} and \texttt{Ingredient} classes in the models module define structured data representations with serialisation support through \texttt{to\_dict()} and \texttt{from\_dict()} class methods, enabling seamless conversion between Python objects and JSON for API communication. The \texttt{RecipeValidator} class provides comprehensive input validation including recipe field verification, ingredient validation, category checking against the allowed set (breakfast, lunch, dinner, snack, dessert), and HTML tag sanitisation to prevent cross-site scripting attacks. The \texttt{NutritionEstimator} class contains a built-in database of 37 common ingredients with approximate nutritional values per 100 grams, enabling calorie estimation, macronutrient summary generation, and recipe categorisation as light, moderate, or hearty based on total caloric content. The \texttt{MealPlanner} class provides weekly meal plan generation, shopping list aggregation from multiple recipes, and recipe suggestion filtering by category and maximum preparation time. The \texttt{RecipeFormatter} class supports multiple output formats including plain text, HTML recipe cards, JSON strings, and one-line summaries.
+
+The following code snippet demonstrates how the library's nutrition estimation is used within the application to provide users with dietary information:
+
+\begin{lstlisting}[language=Python, caption={NutritionEstimator usage for recipe calorie calculation}]
+from recipe_manager import NutritionEstimator
+
+estimator = NutritionEstimator()
+
+ingredients = [
+    {"name": "chicken", "quantity": 500, "unit": "g"},
+    {"name": "rice", "quantity": 200, "unit": "g"},
+    {"name": "olive oil", "quantity": 2, "unit": "tbsp"},
+]
+# Estimate total nutritional values
+summary = estimator.get_nutrition_summary(ingredients)
+# Returns: {calories: 1715, protein: 141, carbs: 56, fat: 100}
+category = estimator.categorize_recipe(summary["calories"])
+# Returns: "hearty"
+\end{lstlisting}
+
+The library includes 35 unit tests implemented with pytest, covering all six classes comprehensively. The test suite validates model serialisation round-trips, validator edge cases including empty and malicious inputs, nutrition estimation accuracy for known ingredients, meal planner randomisation and filtering logic, and formatter output correctness across all supported formats. The library is published on the Python Package Index at \url{https://pypi.org/project/recipe-manager-nci/1.0.0/} and can be installed via \texttt{pip install recipe-manager-nci}.
+
+% ============================================================
+% CLOUD SERVICES
+% ============================================================
+\section{Cloud-Based Services}
+
+The application integrates six AWS services, each serving a distinct purpose within the serverless architecture. This section provides a critical analysis and justification for each service selection.
+
+\subsection{AWS Lambda}
+
+AWS Lambda provides the serverless compute environment for the backend API, executing the Python 3.11 handler function in response to API Gateway events \cite{awslambda}. Lambda was selected over container-based alternatives such as AWS Fargate or traditional EC2 instances because the event-driven request pattern of a recipe API aligns naturally with Lambda's invocation model, and the pay-per-request pricing eliminates costs during periods of inactivity. The function is configured with 256 MB of memory and a 30-second timeout, providing sufficient resources for image processing and database operations.
+
+\subsection{Amazon DynamoDB}
+
+Amazon DynamoDB provides a fully managed NoSQL database for storing recipe data \cite{awsdynamodb}. The table uses on-demand (PAY\_PER\_REQUEST) billing mode, which automatically adjusts read and write capacity based on actual traffic patterns. DynamoDB was preferred over Amazon RDS for this application because recipes are independent entities without complex relational joins, the schema-flexible nature of DynamoDB accommodates varying ingredient lists and instruction formats without schema migrations, and the single-digit millisecond response times ensure responsive API performance.
+
+\subsection{Amazon API Gateway}
+
+Amazon API Gateway provides the HTTP endpoint layer that routes incoming requests to the Lambda function using proxy integration \cite{awsapigateway}. The REST API is configured with a catch-all \texttt{\{proxy+\}} resource that forwards all HTTP methods and paths to the single Lambda handler, enabling the function to implement its own routing logic. API Gateway was selected for its native integration with Lambda, built-in request throttling, and ability to handle CORS preflight OPTIONS requests at the gateway level.
+
+\subsection{Amazon S3}
+
+Amazon S3 serves a dual purpose in the architecture: storing uploaded recipe images in a dedicated bucket and hosting the compiled React frontend as a static website in a separate bucket \cite{awss3}. The image bucket is configured with CORS policies to allow direct browser uploads, while the frontend bucket is configured with a public access policy and static website hosting with index.html serving for single-page application routing.
+
+\begin{lstlisting}[language=Python, caption={S3 image upload with Rekognition integration}]
+def upload_image_to_s3(image_base64, image_key):
+    image_bytes = base64.b64decode(image_base64)
+    s3.put_object(
+        Bucket=S3_BUCKET,
+        Key=image_key,
+        Body=image_bytes,
+        ContentType='image/jpeg'
+    )
+    return image_key
+\end{lstlisting}
+
+\subsection{Amazon Rekognition}
+
+Amazon Rekognition provides computer vision capabilities for automatically detecting and labelling objects within uploaded food photographs \cite{awsrekognition}. The \texttt{detect\_labels} API analyses images stored in S3 and returns a list of detected labels with confidence scores, such as ``Food'', ``Pizza'', ``Bread'', or ``Vegetable''. This service was selected over alternatives such as Amazon Textract because the primary requirement is object identification rather than text extraction, and Rekognition's pre-trained models provide accurate food recognition without the need for custom model training.
+
+\begin{lstlisting}[language=Python, caption={Rekognition label detection from S3 image}]
+def detect_labels_from_s3(image_key):
+    response = rekognition.detect_labels(
+        Image={'S3Object': {
+            'Bucket': S3_BUCKET, 'Name': image_key}},
+        MaxLabels=15, MinConfidence=70
+    )
+    labels = [{'name': l['Name'],
+        'confidence': round(l['Confidence'], 2)}
+        for l in response.get('Labels', [])]
+    return labels
+\end{lstlisting}
+
+\subsection{Amazon SNS}
+
+Amazon Simple Notification Service provides the publish-subscribe messaging infrastructure for recipe update notifications \cite{awssns}. An SNS topic serves as the central notification channel, and users subscribe by providing their email address through the application interface. When new recipes are created, the Lambda function publishes a notification message containing the recipe title, category, timing information, and description to the SNS topic, which then fans out the message to all confirmed email subscribers. SNS was chosen over alternatives such as Amazon SES because SNS natively supports the subscription management workflow including confirmation emails and unsubscribe handling.
+
+\begin{lstlisting}[language=Python, caption={SNS notification on recipe creation}]
+def publish_sns_notification(subject, message):
+    sns.publish(
+        TopicArn=SNS_TOPIC_ARN,
+        Subject=subject[:100],
+        Message=message
+    )
+
+# Called after successful recipe creation
+publish_sns_notification(
+    f'New Recipe: {recipe["title"]}',
+    f'A new recipe has been added to CloudChef!\n'
+    f'Title: {recipe["title"]}\n'
+    f'Category: {recipe.get("cuisine", "N/A")}\n'
+    f'Prep Time: {recipe.get("prepTime")} min\n'
+)
+\end{lstlisting}
+
+% ============================================================
+% IMPLEMENTATION
+% ============================================================
+\section{Implementation}
+
+The implementation follows a clean separation between the frontend React application, the serverless Lambda backend, and the custom Python library. This section documents the implementation of each major component and requirement.
+
+\subsection{Backend API and CRUD Operations}
+
+The Lambda function implements seven API routes through a path-based routing mechanism within a single handler function. All responses include CORS headers to enable cross-origin requests from the S3-hosted frontend. Table~\ref{tab:endpoints} summarises the primary API endpoints.
+
+\begin{table}[H]
+\centering
+\caption{CloudChef REST API Endpoints}
+\label{tab:endpoints}
+\begin{tabular}{|l|l|l|}
+\hline
+\textbf{Method} & \textbf{Endpoint} & \textbf{Description} \\
+\hline
+GET & /recipes & List all recipes \\
+POST & /recipes & Create recipe \\
+GET & /recipes/\{id\} & Get single recipe \\
+PUT & /recipes/\{id\} & Update recipe \\
+DELETE & /recipes/\{id\} & Delete recipe \\
+\hline
+POST & /recipes/analyze-image & Rekognition analysis \\
+POST & /subscribe & Subscribe email (SNS) \\
+GET & /subscribers & Get subscriber count \\
+\hline
+\end{tabular}
+\end{table}
+
+A critical implementation detail involved DynamoDB's handling of numeric data types. The boto3 DynamoDB resource requires Python \texttt{Decimal} objects rather than native \texttt{float} or \texttt{int} types. A recursive conversion function was implemented to transform all numeric values in incoming request bodies before writing to DynamoDB, preventing serialisation errors:
+
+\begin{lstlisting}[language=Python, caption={Decimal conversion for DynamoDB compatibility}]
+from decimal import Decimal
+
+def convert_floats(obj):
+    if isinstance(obj, float):
+        return Decimal(str(obj))
+    if isinstance(obj, int) and not isinstance(obj, bool):
+        return Decimal(str(obj))
+    if isinstance(obj, dict):
+        return {k: convert_floats(v) for k, v in obj.items()}
+    if isinstance(obj, list):
+        return [convert_floats(i) for i in obj]
+    return obj
+\end{lstlisting}
+
+\subsection{Frontend Implementation}
+
+The frontend is implemented as a single-page React 19 application with Vite as the build tool and Tailwind CSS v4 for styling. The application features five distinct views: a home page with recipe grid and search functionality, recipe detail pages with ingredient checklists and nutrition estimates, add and edit recipe forms with dynamic ingredient and instruction management, and image upload with Rekognition analysis capabilities.
+
+The user interface employs a warm, food-themed colour palette centred on orange and amber tones with the Playfair Display serif font for headings and Inter sans-serif for body text. Category badges use distinct colours (amber for breakfast, emerald for lunch, rose for dinner, violet for snacks, pink for desserts) to provide visual differentiation. The responsive grid layout adapts from a single column on mobile devices to three columns on desktop screens.
+
+The home page includes an email subscription section powered by Amazon SNS, allowing users to enter their email address and receive confirmation messages for subscribing to recipe notifications. The subscriber count is displayed dynamically alongside the subscription form.
+
+\subsection{Testing}
+
+The custom library includes 35 automated unit tests implemented with pytest, covering all six classes across the library. The tests validate recipe model serialisation and deserialisation, ingredient validation with edge cases, nutrition estimation accuracy against known calorie values, meal planner output correctness, recipe formatter output across all four formats, and validator sanitisation of potentially malicious HTML input. The CI/CD pipeline executes this test suite as a mandatory gate before deployment proceeds.
+
+% ============================================================
+% CI/CD AND DEPLOYMENT
+% ============================================================
+\section{Continuous Integration, Delivery and Deployment}
+
+The application source code is maintained in a private GitHub repository at \url{https://github.com/KASIREDDY009/CPP\_project}. A comprehensive CI/CD pipeline was implemented using GitHub Actions, triggered automatically on every push to the main branch. The pipeline consists of three sequential jobs that collectively automate testing, infrastructure provisioning, and application deployment.
+
+The first job, \texttt{test-library}, installs the recipe-manager-nci library in editable mode and executes the full pytest suite of 35 unit tests. Only when all tests pass does the pipeline proceed to backend deployment.
+
+The second job, \texttt{deploy-backend}, provisions all required AWS infrastructure using the AWS CLI. This includes creating the DynamoDB table with on-demand billing, creating S3 buckets with CORS configurations for image storage, creating an IAM role with policies for DynamoDB, S3, Rekognition, SNS, and CloudWatch Logs, creating an SNS topic for recipe notifications, packaging and deploying the Lambda function code, and configuring API Gateway with proxy integration resources and CORS-enabled OPTIONS methods. All resource creation commands are idempotent, using existence checks to safely handle repeated deployments without errors.
+
+The third job, \texttt{deploy-frontend}, retrieves the API Gateway URL from the deployed backend, builds the React application with the API URL injected as a Vite environment variable, disables S3 Block Public Access settings, applies a public read bucket policy, and synchronises the compiled assets to the frontend S3 bucket.
+
+The entire pipeline requires only two GitHub repository secrets: \texttt{AWS\_ACCESS\_KEY\_ID} and \texttt{AWS\_SECRET\_ACCESS\_KEY}. All other configuration values including API URLs, resource ARNs, and bucket names are derived dynamically during the pipeline execution.
+
+The deployed frontend application is accessible at: \url{http://cloudchef-frontend-prod-kasireddy.s3-website-eu-west-1.amazonaws.com}. The custom library is published at: \url{https://pypi.org/project/recipe-manager-nci/1.0.0/}.
+
+% ============================================================
+% CONCLUSIONS
+% ============================================================
+\section{Conclusions}
+
+This project successfully demonstrates the development and deployment of a serverless cloud-native application that integrates six AWS services to deliver a feature-rich recipe management platform. CloudChef provides users with an intuitive interface for managing recipes, intelligent food image recognition through Amazon Rekognition, and community engagement through SNS email notifications, all without requiring any server infrastructure management.
+
+Several key findings emerged during the development process. First, the single Lambda function approach with internal routing proved effective for applications with a moderate number of API endpoints. This pattern reduces deployment complexity compared to individual function deployments while maintaining clear code organisation through separate handler functions. However, for applications with significantly more endpoints or varying resource requirements per route, a multi-function architecture would provide better granularity in memory allocation and concurrent execution limits.
+
+Second, the DynamoDB data type handling required careful attention, particularly the requirement to convert Python float and integer values to Decimal objects before storage. This subtle incompatibility between standard JSON parsing and DynamoDB's type system caused initial runtime errors that were resolved through a recursive conversion utility applied to all incoming request bodies. This finding highlights the importance of understanding the data type constraints of managed services rather than assuming standard language type compatibility.
+
+Third, the fully automated CI/CD pipeline that provisions infrastructure from scratch on every deployment proved extremely valuable for reproducibility and disaster recovery. The idempotent design of all resource creation commands means the same pipeline can initialise a fresh environment or update an existing one without modification. This approach aligns with infrastructure as code principles and ensures that the deployed environment always matches the configuration defined in the repository \cite{serverless}.
+
+Fourth, Amazon Rekognition's pre-trained image recognition models provided accurate food detection without requiring custom model training. The service consistently identified relevant labels such as food types, cooking equipment, and ingredients from uploaded photographs, adding genuine utility beyond simple image storage.
+
+The main limitations of the current implementation include the absence of user authentication, which would be essential for a multi-user production deployment to ensure data isolation between different users. A service such as Amazon Cognito could be integrated to provide user registration, login, and JWT-based API authorisation. Additionally, the application currently uses DynamoDB table scans for listing all recipes, which would become inefficient at scale. Implementing Global Secondary Indexes on attributes such as category and creation date would enable more efficient query patterns for large recipe collections.
+
+Future enhancements could include integration with Amazon Cognito for multi-user authentication, implementation of recipe sharing and social features, integration of nutrition APIs for more accurate dietary information, and implementation of recommendation algorithms based on user preferences and browsing history. The serverless architecture established in this project provides a strong foundation for these extensions, as additional Lambda functions and services can be added incrementally without affecting existing functionality.
+
+The development of this project provided valuable experience in serverless application design, AWS service integration through the boto3 SDK, React frontend development with modern tooling, and the challenges of building automated deployment pipelines that provision cloud infrastructure programmatically. The experience reinforced the effectiveness of the serverless paradigm for applications with variable traffic patterns and the importance of designing comprehensive CI/CD pipelines that treat infrastructure as code from the outset of the project.
+
+% ============================================================
+% REFERENCES
+% ============================================================
+\begin{thebibliography}{00}
+
+\bibitem{cloudpatterns} C. Richardson, ``Microservices Patterns: With Examples in Java,'' Manning Publications, 2018.
+
+\bibitem{serverless} P. Sbarski, ``Serverless Architectures on AWS: With Examples Using AWS Lambda,'' 2nd ed., Manning Publications, 2022.
+
+\bibitem{awslambda} Amazon Web Services, ``AWS Lambda Developer Guide,'' 2024. [Online]. Available: https://docs.aws.amazon.com/lambda/
+
+\bibitem{awsdynamodb} Amazon Web Services, ``Amazon DynamoDB Developer Guide,'' 2024. [Online]. Available: https://docs.aws.amazon.com/dynamodb/
+
+\bibitem{awsapigateway} Amazon Web Services, ``Amazon API Gateway Developer Guide,'' 2024. [Online]. Available: https://docs.aws.amazon.com/apigateway/
+
+\bibitem{awss3} Amazon Web Services, ``Amazon Simple Storage Service (S3) Documentation,'' 2024. [Online]. Available: https://docs.aws.amazon.com/s3/
+
+\bibitem{awsrekognition} Amazon Web Services, ``Amazon Rekognition Developer Guide,'' 2024. [Online]. Available: https://docs.aws.amazon.com/rekognition/
+
+\bibitem{awssns} Amazon Web Services, ``Amazon Simple Notification Service Developer Guide,'' 2024. [Online]. Available: https://docs.aws.amazon.com/sns/
+
+\bibitem{react} Meta Platforms, ``React Documentation,'' 2024. [Online]. Available: https://react.dev/
+
+\bibitem{vite} E. You, ``Vite: Next Generation Frontend Tooling,'' 2024. [Online]. Available: https://vitejs.dev/
+
+\end{thebibliography}
+
+\end{document}
