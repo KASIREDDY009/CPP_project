@@ -64,14 +64,18 @@ export default function RecipeForm({ existingRecipe = null }) {
   // Ingredient helpers
   // ---------------------------------------------------------------
   const updateIngredient = (index, field, value) => {
-    const updated = [...ingredients]
-    updated[index] = { ...updated[index], [field]: value }
-    setIngredients(updated)
+    setIngredients(prev => {
+      const updated = [...prev]
+      updated[index] = { ...updated[index], [field]: value }
+      return updated
+    })
   }
-  const addIngredient = () => setIngredients([...ingredients, emptyIngredient()])
+  const addIngredient = () => setIngredients(prev => [...prev, emptyIngredient()])
   const removeIngredient = (index) => {
-    if (ingredients.length <= 1) return
-    setIngredients(ingredients.filter((_, i) => i !== index))
+    setIngredients(prev => {
+      if (prev.length <= 1) return prev
+      return prev.filter((_, i) => i !== index)
+    })
   }
 
   // ---------------------------------------------------------------
