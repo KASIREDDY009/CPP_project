@@ -168,17 +168,35 @@ def create_recipe(event):
     recipe_id = str(uuid.uuid4())
     now = datetime.now(timezone.utc).isoformat()
 
+    # Build recipe item, filtering out empty strings to avoid DynamoDB issues
+    raw_ingredients = body.get('ingredients', [])
+    if isinstance(raw_ingredients, list):
+        clean_ingredients = []
+        for ing in raw_ingredients:
+            if isinstance(ing, dict) and ing.get('name'):
+                clean_ingredients.append({
+                    'name': str(ing.get('name', '')),
+                    'quantity': ing.get('quantity', Decimal('0')),
+                    'unit': str(ing.get('unit', 'g'))
+                })
+    else:
+        clean_ingredients = []
+
+    servings_val = body.get('servings', Decimal('0'))
+    if not servings_val and servings_val != Decimal('0'):
+        servings_val = Decimal('0')
+
     recipe = {
         'recipeId': recipe_id,
         'title': body.get('title', ''),
-        'description': body.get('description', ''),
-        'instructions': body.get('instructions', ''),
-        'ingredients': body.get('ingredients', []),
-        'cuisine': body.get('cuisine', ''),
-        'difficulty': body.get('difficulty', 'medium'),
-        'prepTime': body.get('prepTime', ''),
-        'cookTime': body.get('cookTime', ''),
-        'servings': body.get('servings', 0),
+        'description': body.get('description', '') or 'No description',
+        'instructions': body.get('instructions', '') or 'No instructions',
+        'ingredients': clean_ingredients,
+        'cuisine': body.get('cuisine', '') or 'other',
+        'difficulty': body.get('difficulty', 'medium') or 'medium',
+        'prepTime': str(body.get('prepTime', '0') or '0'),
+        'cookTime': str(body.get('cookTime', '0') or '0'),
+        'servings': servings_val,
         'createdAt': now,
         'updatedAt': now
     }
@@ -213,6 +231,9 @@ def create_recipe(event):
         return build_response(201, {'recipe': recipe})
     except ClientError as e:
         print(f'[ERROR] DynamoDB put_item failed: {e}')
+        return build_response(500, {'error': 'Failed to create recipe'})
+    except Exception as e:
+        print(f'[ERROR] Unexpected error creating recipe: {e}')
         return build_response(500, {'error': 'Failed to create recipe'})
 
 

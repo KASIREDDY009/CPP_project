@@ -182,6 +182,7 @@ export default function RecipeForm({ existingRecipe = null }) {
   // Render
   // ---------------------------------------------------------------
   const inputBase = 'w-full rounded-xl border border-stone-200 bg-white px-4 py-2.5 text-sm text-stone-800 placeholder:text-stone-400 focus:outline-none focus:ring-2 focus:ring-orange-300 focus:border-orange-400 transition'
+  const inputFlexItem = 'rounded-xl border border-stone-200 bg-white px-4 py-2.5 text-sm text-stone-800 placeholder:text-stone-400 focus:outline-none focus:ring-2 focus:ring-orange-300 focus:border-orange-400 transition'
   const labelBase = 'block text-sm font-medium text-stone-700 mb-1.5'
 
   return (
@@ -297,7 +298,7 @@ export default function RecipeForm({ existingRecipe = null }) {
                 value={ing.name}
                 onChange={e => updateIngredient(i, 'name', e.target.value)}
                 placeholder="Ingredient"
-                className={`flex-1 ${inputBase}`}
+                className={`flex-1 min-w-0 ${inputFlexItem}`}
               />
               <input
                 type="number"
@@ -306,12 +307,12 @@ export default function RecipeForm({ existingRecipe = null }) {
                 value={ing.quantity}
                 onChange={e => updateIngredient(i, 'quantity', e.target.value)}
                 placeholder="Qty"
-                className={`w-20 ${inputBase}`}
+                className={`w-20 ${inputFlexItem}`}
               />
               <select
                 value={ing.unit}
                 onChange={e => updateIngredient(i, 'unit', e.target.value)}
-                className={`w-24 ${inputBase}`}
+                className={`w-24 ${inputFlexItem}`}
               >
                 {UNITS.map(u => <option key={u} value={u}>{u}</option>)}
               </select>
