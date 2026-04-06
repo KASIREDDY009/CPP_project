@@ -1,63 +1,34 @@
-import axios from 'axios'
+import axios from 'axios';
 
-const BASE_URL = import.meta.env.VITE_API_URL || ''
+const API_BASE_URL = 'https://xbvwspt2ob.execute-api.eu-west-1.amazonaws.com/prod';
 
 const api = axios.create({
-  baseURL: BASE_URL,
-  headers: { 'Content-Type': 'application/json' },
-  timeout: 30000,
-})
+  baseURL: API_BASE_URL,
+  headers: {
+    'Content-Type': 'application/json',
+  },
+});
 
-// ----------------------------------------------------------------
-// Recipes
-// ----------------------------------------------------------------
+// Add auth token to every request
+api.interceptors.request.use((config) => {
+  const token = localStorage.getItem('token');
+  if (token) {
+    config.headers.Authorization = `Bearer ${token}`;
+  }
+  return config;
+});
 
-export async function getRecipes() {
-  const { data } = await api.get('/recipes')
-  return data.recipes || []
-}
+// Handle 401 responses
+api.interceptors.response.use(
+  (response) => response,
+  (error) => {
+    if (error.response && error.response.status === 401) {
+      localStorage.removeItem('token');
+      localStorage.removeItem('username');
+      window.location.href = '/';
+    }
+    return Promise.reject(error);
+  }
+);
 
-export async function getRecipe(id) {
-  const { data } = await api.get(`/recipes/${id}`)
-  return data.recipe
-}
-
-export async function createRecipe(recipeData) {
-  const { data } = await api.post('/recipes', recipeData)
-  return data.recipe
-}
-
-export async function updateRecipe(id, recipeData) {
-  const { data } = await api.put(`/recipes/${id}`, recipeData)
-  return data.recipe
-}
-
-export async function deleteRecipe(id) {
-  const { data } = await api.delete(`/recipes/${id}`)
-  return data
-}
-
-// ----------------------------------------------------------------
-// Notifications (SNS)
-// ----------------------------------------------------------------
-
-export async function subscribeEmail(email) {
-  const { data } = await api.post('/subscribe', { email })
-  return data
-}
-
-export async function getSubscriberCount() {
-  const { data } = await api.get('/subscribers')
-  return data.count || 0
-}
-
-// ----------------------------------------------------------------
-// Image analysis (Rekognition)
-// ----------------------------------------------------------------
-
-export async function analyzeImage(base64Image) {
-  const { data } = await api.post('/recipes/analyze-image', { image: base64Image })
-  return data
-}
-
-export default api
+export default api;

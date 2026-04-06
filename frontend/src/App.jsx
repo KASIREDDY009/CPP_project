@@ -1,51 +1,58 @@
-import { Routes, Route, useLocation } from 'react-router-dom'
-import { Toaster } from 'react-hot-toast'
-import Navbar from './components/Navbar'
-import Home from './pages/Home'
-import AddRecipe from './pages/AddRecipe'
-import RecipeDetail from './pages/RecipeDetail'
-import EditRecipe from './pages/EditRecipe'
+import React, { useState, useEffect } from 'react';
+import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
+import { ToastContainer } from 'react-toastify';
+import 'react-toastify/dist/ReactToastify.css';
+import Navbar from './components/Navbar';
+import Login from './pages/Login';
+import Register from './pages/Register';
+import Dashboard from './pages/Dashboard';
+import Pantry from './pages/Pantry';
+import AddItem from './pages/AddItem';
+import EditItem from './pages/EditItem';
 
-export default function App() {
-  const location = useLocation()
+function App() {
+  const [isLoggedIn, setIsLoggedIn] = useState(false);
+  const [username, setUsername] = useState('');
+
+  useEffect(() => {
+    const token = localStorage.getItem('token');
+    const user = localStorage.getItem('username');
+    if (token && user) {
+      setIsLoggedIn(true);
+      setUsername(user);
+    }
+  }, []);
+
+  const handleLogin = (token, user) => {
+    localStorage.setItem('token', token);
+    localStorage.setItem('username', user);
+    setIsLoggedIn(true);
+    setUsername(user);
+  };
+
+  const handleLogout = () => {
+    localStorage.removeItem('token');
+    localStorage.removeItem('username');
+    setIsLoggedIn(false);
+    setUsername('');
+  };
 
   return (
-    <div className="min-h-screen flex flex-col bg-stone-50">
-      <Navbar />
-
-      <main className="flex-1">
-        <div key={location.pathname} className="animate-fade-in">
-          <Routes location={location}>
-            <Route path="/" element={<Home />} />
-            <Route path="/add" element={<AddRecipe />} />
-            <Route path="/recipe/:id" element={<RecipeDetail />} />
-            <Route path="/edit/:id" element={<EditRecipe />} />
-          </Routes>
-        </div>
-      </main>
-
-      {/* Footer */}
-      <footer className="border-t border-stone-200 bg-white mt-16">
-        <div className="max-w-6xl mx-auto px-4 py-8 text-center">
-          <p className="font-display text-lg text-stone-700 tracking-wide">CloudChef</p>
-          <p className="text-sm text-stone-400 mt-1">&copy; 2026 &middot; Your Personal Recipe Collection</p>
-        </div>
-      </footer>
-
-      <Toaster
-        position="bottom-right"
-        toastOptions={{
-          duration: 3000,
-          style: {
-            background: '#292524',
-            color: '#FAFAF9',
-            borderRadius: '10px',
-            fontSize: '14px',
-          },
-          success: { iconTheme: { primary: '#059669', secondary: '#fff' } },
-          error: { iconTheme: { primary: '#DC2626', secondary: '#fff' } },
-        }}
-      />
-    </div>
-  )
+    <Router>
+      <div className="min-h-screen bg-gray-50">
+        {isLoggedIn && <Navbar username={username} onLogout={handleLogout} />}
+        <ToastContainer position="top-right" autoClose={3000} />
+        <Routes>
+          <Route path="/" element={isLoggedIn ? <Navigate to="/dashboard" /> : <Login onLogin={handleLogin} />} />
+          <Route path="/register" element={isLoggedIn ? <Navigate to="/dashboard" /> : <Register onLogin={handleLogin} />} />
+          <Route path="/dashboard" element={isLoggedIn ? <Dashboard /> : <Navigate to="/" />} />
+          <Route path="/pantry" element={isLoggedIn ? <Pantry /> : <Navigate to="/" />} />
+          <Route path="/add-item" element={isLoggedIn ? <AddItem /> : <Navigate to="/" />} />
+          <Route path="/edit-item/:id" element={isLoggedIn ? <EditItem /> : <Navigate to="/" />} />
+        </Routes>
+      </div>
+    </Router>
+  );
 }
+
+export default App;

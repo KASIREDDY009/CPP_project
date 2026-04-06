@@ -1,74 +1,37 @@
-# CloudChef - Smart Recipe Manager
+# SmartPantry - Kitchen Inventory Tracker
 
-An AI-powered recipe management application that lets users create, discover, and share recipes with intelligent features like image recognition and NLP-powered recipe insights.
+A serverless web application that helps users manage their kitchen pantry, track food expiry dates, and reduce food waste using AI-powered image recognition.
+
+## Features
+- Add, edit, delete pantry items with categories and expiry dates
+- Upload food photos — AWS Rekognition auto-detects and categorizes items
+- Dashboard with real-time stats (total items, expiring soon, expired)
+- Email notifications via AWS SNS when items are about to expire
+- Search and filter items by name or category
+
+## AWS Services Used
+1. **S3** — Frontend hosting + food image storage
+2. **Lambda** — Serverless backend API
+3. **API Gateway** — REST API endpoints
+4. **DynamoDB** — NoSQL database for users and pantry items
+5. **Rekognition** — AI image analysis for food detection
+6. **SNS** — Email notifications for expiry alerts
 
 ## Tech Stack
-
-- **Frontend:** React + Vite
-- **Backend:** AWS Lambda (Python 3.11)
-- **Shared Library:** Python package with common utilities
-
-## AWS Services
-
-| Service | Purpose |
-|---------|---------|
-| **AWS Lambda** | Serverless backend API |
-| **API Gateway** | REST API endpoint routing |
-| **DynamoDB** | Recipe data storage |
-| **S3** | Recipe image storage + frontend hosting |
-| **Amazon Rekognition** | Food image recognition |
-| **Amazon SNS** | Email notifications for new recipes |
+- **Frontend:** React + Tailwind CSS + Vite
+- **Backend:** Python (AWS Lambda)
+- **Database:** DynamoDB
+- **CI/CD:** GitHub Actions
+- **Library:** pantry-manager-nci (PyPI)
 
 ## Project Structure
-
 ```
-kasi/
-├── backend/            # Lambda function code
-├── frontend/           # React + Vite application
-├── library/            # Shared Python library
-└── .github/workflows/  # CI/CD pipeline
-```
-
-## Setup Instructions
-
-### Prerequisites
-
-- Python 3.11+
-- Node.js 20+
-- AWS account with programmatic access
-
-### Local Development
-
-**Library:**
-```bash
-cd library
-pip install -e .
-pip install pytest
-pytest tests/ -v
+├── backend/          # Lambda function code
+├── frontend/         # React application
+├── library/          # PyPI package (pantry-manager-nci)
+├── kasi_cpp/         # LaTeX report
+└── .github/workflows # CI/CD pipeline
 ```
 
-**Frontend:**
-```bash
-cd frontend
-npm install
-VITE_API_URL=http://localhost:8000 npm run dev
-```
-
-### Deployment
-
-The project uses GitHub Actions for CI/CD. Add these repository secrets:
-
-- `AWS_ACCESS_KEY_ID`
-- `AWS_SECRET_ACCESS_KEY`
-
-Push to `main` to trigger the pipeline, which will:
-
-1. Run library tests
-2. Deploy backend (DynamoDB, S3, Lambda, API Gateway)
-3. Deploy frontend (S3 static website)
-
-## Deployed URL
-
-**Frontend:** http://cloudchef-frontend-prod-kasireddy.s3-website-eu-west-1.amazonaws.com
-
-**API:** https://{api-id}.execute-api.eu-west-1.amazonaws.com/prod
+## Author
+Kasireddy — National College of Ireland

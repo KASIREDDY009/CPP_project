@@ -1,267 +1,108 @@
-AWSTemplateFormatVersion: '2010-09-09'
+AWSTemplateFormatVersion: "2010-09-09"
 Transform: AWS::Serverless-2016-10-31
-Description: >
-  CloudChef Recipe Manager - Backend Infrastructure
-  Single Lambda function with API Gateway, DynamoDB, S3, Rekognition, and Translate.
-  Region: eu-west-1
+Description: SmartPantry - Kitchen Inventory Tracker
 
-# ---------------------------------------------------------------------------
-# Global settings applied to all Lambda functions
-# ---------------------------------------------------------------------------
 Globals:
   Function:
     Timeout: 30
+    Runtime: python3.9
     MemorySize: 256
-    Runtime: python3.11
-
-# ---------------------------------------------------------------------------
-# Parameters for customisation at deploy time
-# ---------------------------------------------------------------------------
-Parameters:
-  Environment:
-    Type: String
-    Default: prod
-    AllowedValues:
-      - dev
-      - staging
-      - prod
 
 Resources:
-
-  # =========================================================================
-  # DynamoDB Table - stores all recipe data
-  # =========================================================================
-  RecipesTable:
+  # DynamoDB Tables
+  UsersTable:
     Type: AWS::DynamoDB::Table
     Properties:
-      TableName: !Sub cloudchef-recipes-${Environment}
+      TableName: SmartPantryUsers
       AttributeDefinitions:
-        - AttributeName: recipeId
+        - AttributeName: id
           AttributeType: S
       KeySchema:
-        - AttributeName: recipeId
+        - AttributeName: id
           KeyType: HASH
       BillingMode: PAY_PER_REQUEST
-      Tags:
-        - Key: Project
-          Value: CloudChef
-        - Key: Environment
-          Value: !Ref Environment
 
-  # =========================================================================
-  # S3 Bucket - stores recipe images and analysis uploads
-  # =========================================================================
+  ItemsTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: SmartPantryItems
+      AttributeDefinitions:
+        - AttributeName: id
+          AttributeType: S
+      KeySchema:
+        - AttributeName: id
+          KeyType: HASH
+      BillingMode: PAY_PER_REQUEST
+
+  # S3 Bucket for images
   ImagesBucket:
     Type: AWS::S3::Bucket
     Properties:
-      BucketName: !Sub cloudchef-images-${Environment}-${AWS::AccountId}
-      CorsConfiguration:
-        CorsRules:
-          - AllowedHeaders:
-              - '*'
-            AllowedMethods:
-              - GET
-              - PUT
-              - POST
-            AllowedOrigins:
-              - '*'
-            MaxAge: 3600
+      BucketName: smartpantry-images-kasireddy
       PublicAccessBlockConfiguration:
         BlockPublicAcls: false
         BlockPublicPolicy: false
         IgnorePublicAcls: false
         RestrictPublicBuckets: false
-      Tags:
-        - Key: Project
-          Value: CloudChef
-        - Key: Environment
-          Value: !Ref Environment
+      CorsConfiguration:
+        CorsRules:
+          - AllowedHeaders: ["*"]
+            AllowedMethods: [GET, PUT, POST]
+            AllowedOrigins: ["*"]
 
-  # =========================================================================
-  # IAM Role - grants Lambda access to DynamoDB, S3, Rekognition, Translate
-  # =========================================================================
-  LambdaExecutionRole:
-    Type: AWS::IAM::Role
+  # SNS Topic
+  ExpiryNotificationTopic:
+    Type: AWS::SNS::Topic
     Properties:
-      RoleName: !Sub cloudchef-lambda-role-${Environment}
-      AssumeRolePolicyDocument:
-        Version: '2012-10-17'
-        Statement:
-          - Effect: Allow
-            Principal:
-              Service: lambda.amazonaws.com
-            Action: sts:AssumeRole
-      ManagedPolicyArns:
-        # Basic Lambda execution (CloudWatch Logs)
-        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
-      Policies:
-        - PolicyName: CloudChefDynamoDBAccess
-          PolicyDocument:
-            Version: '2012-10-17'
-            Statement:
-              - Effect: Allow
-                Action:
-                  - dynamodb:Scan
-                  - dynamodb:GetItem
-                  - dynamodb:PutItem
-                  - dynamodb:UpdateItem
-                  - dynamodb:DeleteItem
-                Resource: !GetAtt RecipesTable.Arn
-        - PolicyName: CloudChefS3Access
-          PolicyDocument:
-            Version: '2012-10-17'
-            Statement:
-              - Effect: Allow
-                Action:
-                  - s3:PutObject
-                  - s3:GetObject
-                  - s3:DeleteObject
-                Resource: !Sub ${ImagesBucket.Arn}/*
-        - PolicyName: CloudChefRekognitionAccess
-          PolicyDocument:
-            Version: '2012-10-17'
-            Statement:
-              - Effect: Allow
-                Action:
-                  - rekognition:DetectLabels
-                Resource: '*'
-        - PolicyName: CloudChefTranslateAccess
-          PolicyDocument:
-            Version: '2012-10-17'
-            Statement:
-              - Effect: Allow
-                Action:
-                  - translate:TranslateText
-                Resource: '*'
+      TopicName: SmartPantryExpiryAlerts
 
-  # =========================================================================
-  # Lambda Function - single handler for all API routes
-  # =========================================================================
-  CloudChefFunction:
+  # Lambda Function
+  SmartPantryFunction:
     Type: AWS::Serverless::Function
     Properties:
-      FunctionName: !Sub cloudchef-api-${Environment}
+      FunctionName: SmartPantryFunction
       Handler: lambda_function.lambda_handler
       CodeUri: .
-      Role: !GetAtt LambdaExecutionRole.Arn
       Environment:
         Variables:
-          DYNAMODB_TABLE: !Ref RecipesTable
           S3_BUCKET: !Ref ImagesBucket
-          REGION: !Ref AWS::Region
+          SNS_TOPIC_ARN: !Ref ExpiryNotificationTopic
+          JWT_SECRET: smartpantry-secret-key-2026
+      Policies:
+        - DynamoDBCrudPolicy:
+            TableName: !Ref UsersTable
+        - DynamoDBCrudPolicy:
+            TableName: !Ref ItemsTable
+        - S3CrudPolicy:
+            BucketName: !Ref ImagesBucket
+        - RekognitionDetectOnlyPolicy: {}
+        - SNSPublishMessagePolicy:
+            TopicName: !GetAtt ExpiryNotificationTopic.TopicName
       Events:
-        # --- GET /recipes ---
-        GetRecipes:
+        ProxyApi:
           Type: Api
           Properties:
-            RestApiId: !Ref CloudChefApi
-            Path: /recipes
-            Method: GET
-        # --- POST /recipes ---
-        CreateRecipe:
-          Type: Api
-          Properties:
-            RestApiId: !Ref CloudChefApi
-            Path: /recipes
-            Method: POST
-        # --- POST /recipes/analyze-image ---
-        AnalyzeImage:
-          Type: Api
-          Properties:
-            RestApiId: !Ref CloudChefApi
-            Path: /recipes/analyze-image
-            Method: POST
-        # --- GET /recipes/{id} ---
-        GetRecipe:
-          Type: Api
-          Properties:
-            RestApiId: !Ref CloudChefApi
-            Path: /recipes/{id}
-            Method: GET
-        # --- PUT /recipes/{id} ---
-        UpdateRecipe:
-          Type: Api
-          Properties:
-            RestApiId: !Ref CloudChefApi
-            Path: /recipes/{id}
-            Method: PUT
-        # --- DELETE /recipes/{id} ---
-        DeleteRecipe:
-          Type: Api
-          Properties:
-            RestApiId: !Ref CloudChefApi
-            Path: /recipes/{id}
-            Method: DELETE
-        # --- POST /recipes/{id}/translate ---
-        TranslateRecipe:
-          Type: Api
-          Properties:
-            RestApiId: !Ref CloudChefApi
-            Path: /recipes/{id}/translate
-            Method: POST
-        # --- OPTIONS (CORS preflight) ---
-        OptionsRecipes:
-          Type: Api
-          Properties:
-            RestApiId: !Ref CloudChefApi
-            Path: /recipes
-            Method: OPTIONS
-        OptionsRecipeId:
-          Type: Api
-          Properties:
-            RestApiId: !Ref CloudChefApi
-            Path: /recipes/{id}
-            Method: OPTIONS
-        OptionsTranslate:
-          Type: Api
-          Properties:
-            RestApiId: !Ref CloudChefApi
-            Path: /recipes/{id}/translate
-            Method: OPTIONS
-        OptionsAnalyze:
-          Type: Api
-          Properties:
-            RestApiId: !Ref CloudChefApi
-            Path: /recipes/analyze-image
-            Method: OPTIONS
+            Path: /{proxy+}
+            Method: ANY
+            RestApiId: !Ref SmartPantryApi
 
-  # =========================================================================
-  # API Gateway REST API with CORS enabled
-  # =========================================================================
-  CloudChefApi:
+  # API Gateway
+  SmartPantryApi:
     Type: AWS::Serverless::Api
     Properties:
-      Name: !Sub cloudchef-api-${Environment}
-      StageName: !Ref Environment
+      StageName: prod
       Cors:
         AllowMethods: "'GET,POST,PUT,DELETE,OPTIONS'"
-        AllowHeaders: "'Content-Type'"
+        AllowHeaders: "'Content-Type,Authorization'"
         AllowOrigin: "'*'"
 
-# ---------------------------------------------------------------------------
-# Outputs - useful values for CI/CD and frontend configuration
-# ---------------------------------------------------------------------------
 Outputs:
   ApiUrl:
-    Description: URL of the CloudChef API
-    Value: !Sub https://${CloudChefApi}.execute-api.${AWS::Region}.amazonaws.com/${Environment}
-    Export:
-      Name: !Sub CloudChef-ApiUrl-${Environment}
-
-  DynamoDBTable:
-    Description: Name of the DynamoDB recipes table
-    Value: !Ref RecipesTable
-    Export:
-      Name: !Sub CloudChef-DynamoDBTable-${Environment}
-
-  S3Bucket:
-    Description: Name of the S3 images bucket
+    Description: API Gateway endpoint URL
+    Value: !Sub "https://${SmartPantryApi}.execute-api.${AWS::Region}.amazonaws.com/prod"
+  ImagesBucketName:
+    Description: S3 bucket for images
     Value: !Ref ImagesBucket
-    Export:
-      Name: !Sub CloudChef-S3Bucket-${Environment}
-
-  LambdaFunctionArn:
-    Description: ARN of the CloudChef Lambda function
-    Value: !GetAtt CloudChefFunction.Arn
-    Export:
-      Name: !Sub CloudChef-LambdaArn-${Environment}
+  SNSTopicArn:
+    Description: SNS Topic ARN
+    Value: !Ref ExpiryNotificationTopic

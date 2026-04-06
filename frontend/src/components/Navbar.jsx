@@ -1,85 +1,30 @@
-import { Link, useLocation } from 'react-router-dom'
-import { ChefHat, Plus, Home, Menu, X } from 'lucide-react'
-import { useState } from 'react'
+import React from 'react';
+import { Link, useLocation } from 'react-router-dom';
 
-export default function Navbar() {
-  const location = useLocation()
-  const [mobileOpen, setMobileOpen] = useState(false)
+function Navbar({ username, onLogout }) {
+  const location = useLocation();
 
-  const links = [
-    { to: '/', label: 'Home', icon: Home },
-    { to: '/add', label: 'Add Recipe', icon: Plus },
-  ]
-
-  const isActive = (path) => location.pathname === path
+  const isActive = (path) => location.pathname === path ? 'text-green-600 font-semibold' : 'text-gray-600 hover:text-green-600';
 
   return (
-    <nav className="sticky top-0 z-50 bg-white/90 backdrop-blur-md border-b border-stone-200/80 shadow-sm">
-      <div className="max-w-6xl mx-auto px-4">
-        <div className="flex items-center justify-between h-16">
-          {/* Logo */}
-          <Link to="/" className="flex items-center gap-2.5 group">
-            <div className="w-9 h-9 rounded-lg bg-gradient-to-br from-orange-500 to-orange-700 flex items-center justify-center shadow-md shadow-orange-200/60 group-hover:shadow-orange-300/80 transition-shadow">
-              <ChefHat className="w-5 h-5 text-white" strokeWidth={2} />
-            </div>
-            <span className="font-display text-xl font-semibold text-stone-800 tracking-tight">
-              CloudChef
-            </span>
-          </Link>
-
-          {/* Desktop nav */}
-          <div className="hidden sm:flex items-center gap-1">
-            {links.map(({ to, label, icon: Icon }) => (
-              <Link
-                key={to}
-                to={to}
-                className={`
-                  flex items-center gap-1.5 px-4 py-2 rounded-lg text-sm font-medium transition-all duration-200
-                  ${isActive(to)
-                    ? 'bg-orange-50 text-orange-700'
-                    : 'text-stone-500 hover:text-stone-800 hover:bg-stone-100'
-                  }
-                `}
-              >
-                <Icon className="w-4 h-4" />
-                {label}
-              </Link>
-            ))}
-          </div>
-
-          {/* Mobile menu button */}
-          <button
-            onClick={() => setMobileOpen(!mobileOpen)}
-            className="sm:hidden p-2 rounded-lg text-stone-500 hover:bg-stone-100 transition"
-            aria-label="Toggle menu"
-          >
-            {mobileOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
+    <nav className="bg-white shadow-sm border-b border-gray-200">
+      <div className="max-w-6xl mx-auto px-4 py-3 flex items-center justify-between">
+        <Link to="/dashboard" className="text-xl font-bold text-green-600">
+          SmartPantry
+        </Link>
+        <div className="flex items-center gap-6">
+          <Link to="/dashboard" className={isActive('/dashboard')}>Dashboard</Link>
+          <Link to="/pantry" className={isActive('/pantry')}>My Pantry</Link>
+          <Link to="/add-item" className={isActive('/add-item')}>Add Item</Link>
+          <span className="text-gray-400">|</span>
+          <span className="text-sm text-gray-500">{username}</span>
+          <button onClick={onLogout} className="text-sm text-red-500 hover:text-red-700">
+            Logout
           </button>
         </div>
-
-        {/* Mobile dropdown */}
-        {mobileOpen && (
-          <div className="sm:hidden pb-4 border-t border-stone-100 mt-1 pt-3 space-y-1">
-            {links.map(({ to, label, icon: Icon }) => (
-              <Link
-                key={to}
-                to={to}
-                onClick={() => setMobileOpen(false)}
-                className={`
-                  flex items-center gap-2 px-3 py-2.5 rounded-lg text-sm font-medium transition-all
-                  ${isActive(to)
-                    ? 'bg-orange-50 text-orange-700'
-                    : 'text-stone-600 hover:bg-stone-100'
-                  }
-                `}
-              >
-                <Icon className="w-4 h-4" />
-                {label}
-              </Link>
-            ))}
-          </div>
-        )}
       </div>
     </nav>
-  )
+  );
 }
+
+export default Navbar;
