@@ -25,29 +25,43 @@ function AddItem() {
     setForm((prev) => ({ ...prev, [name]: value }));
   };
 
+  const compressImage = (file, maxWidth = 800) => {
+    return new Promise((resolve, reject) => {
+      const img = new Image();
+      img.onload = () => {
+        const canvas = document.createElement('canvas');
+        const scale = Math.min(1, maxWidth / img.width);
+        canvas.width = img.width * scale;
+        canvas.height = img.height * scale;
+        const ctx = canvas.getContext('2d');
+        ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+        resolve(canvas.toDataURL('image/jpeg', 0.7));
+      };
+      img.onerror = () => reject(new Error('Failed to load image'));
+      img.src = URL.createObjectURL(file);
+    });
+  };
+
   const handleImageUpload = async (e) => {
     const file = e.target.files[0];
     if (!file) return;
 
     setUploading(true);
     try {
-      const reader = new FileReader();
-      reader.onloadend = async () => {
-        const base64 = reader.result;
-        const res = await api.post('/upload', { image: base64 });
-        setForm((prev) => ({
-          ...prev,
-          image_url: res.data.image_url,
-          name: prev.name || res.data.detected_name || '',
-          category: res.data.detected_category || prev.category,
-        }));
-        setLabels(res.data.labels || []);
-        toast.success('Image analyzed! Labels detected.');
-        setUploading(false);
-      };
-      reader.readAsDataURL(file);
+      const base64 = await compressImage(file);
+
+      const res = await api.post('/upload', { image: base64 });
+      setForm((prev) => ({
+        ...prev,
+        image_url: res.data.image_url,
+        name: prev.name || res.data.detected_name || '',
+        category: res.data.detected_category || prev.category,
+      }));
+      setLabels(res.data.labels || []);
+      toast.success('Image analyzed! Labels detected.');
     } catch (err) {
-      toast.error('Image upload failed');
+      toast.error(err.response?.data?.error || 'Image upload failed');
+    } finally {
       setUploading(false);
     }
   };
