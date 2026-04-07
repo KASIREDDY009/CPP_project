@@ -276,25 +276,9 @@ jobs:
       - name: Output website URL
         run: echo "Frontend URL - http://smartpantry-frontend-prod-kasireddy.s3-website-eu-west-1.amazonaws.com"
 
-  publish-library:
-    runs-on: ubuntu-latest
-    needs: test-library
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Set up Python 3.11
-        uses: actions/setup-python@v5
-        with:
-          python-version: "3.11"
-
-      - name: Install build tools
-        run: pip install build twine
-
-      - name: Build package
-        run: cd library && python -m build
-
-      - name: Publish to PyPI
-        env:
-          TWINE_USERNAME: __token__
-          TWINE_PASSWORD: ${{ secrets.PYPI_TOKEN }}
-        run: cd library && python -m twine upload dist/* --skip-existing
+  # NOTE: The library is already published on PyPI as
+  # https://pypi.org/project/recipe-manager-nci/ (v1.0.0, uploaded
+  # 2026-03-27). Re-publishing on every CI run is unnecessary and was
+  # previously failing because no PYPI_TOKEN secret is configured.
+  # The publish step has been intentionally removed; the library code
+  # in /library/ remains the canonical source.

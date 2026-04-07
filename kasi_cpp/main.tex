@@ -233,7 +233,7 @@ test\_expiry.py (ExpiryTracker) & 15 \\
 \label{tab:libtests}
 \end{table}
 
-The library is published on the Python Package Index as \texttt{recipe-manager-nci} (version 2.0.0, the SmartPantry edition) at \url{https://pypi.org/project/recipe-manager-nci/} and can be installed via \texttt{pip install recipe-manager-nci}.
+The library is published on the Python Package Index as \texttt{recipe-manager-nci} at \url{https://pypi.org/project/recipe-manager-nci/} and can be installed via \texttt{pip install recipe-manager-nci}.
 
 % ============================================================
 % AWS SERVICES
@@ -364,15 +364,13 @@ On the backend, Lambda decodes the base64 string, generates a UUID for the image
 % ============================================================
 \section{CI/CD Pipeline}
 
-The CI/CD pipeline is implemented as a single GitHub Actions workflow (\texttt{.github/workflows/deploy.yml}) that runs on every push to the \texttt{main} branch. The pipeline is organised into four sequential jobs that together provision infrastructure from scratch, test and deploy code, and update the public endpoints.
+The CI/CD pipeline is implemented as a single GitHub Actions workflow (\texttt{.github/workflows/deploy.yml}) that runs on every push to the \texttt{main} branch. The pipeline is organised into three sequential jobs that together provision infrastructure from scratch, test and deploy code, and update the public endpoints.
 
 The first job, \texttt{test-library}, installs the \texttt{recipe-manager-nci} library in editable mode and runs the full \texttt{pytest} suite of 51 unit tests. Only when all tests pass does the pipeline proceed to deployment.
 
 The second job, \texttt{deploy-backend}, configures AWS credentials, creates the DynamoDB table if absent, creates both S3 buckets (frontend and images) with appropriate website configuration and CORS rules, ensures the SNS topic exists, packages the Lambda deployment artefact (Lambda code plus the \texttt{recipe-manager-nci} library installed via \texttt{pip install -t}), and updates or creates the Lambda function with the appropriate IAM execution role and environment variables. It then provisions an API Gateway REST API with a \texttt{\{proxy+\}} resource integrated to Lambda via AWS\_PROXY, configures CORS preflight, and deploys to the \texttt{prod} stage.
 
-The third job, \texttt{publish-library}, builds the source distribution and wheel for the \texttt{recipe-manager-nci} library and publishes them to the Python Package Index using a stored API token. (The first publish succeeded; subsequent runs are no-ops because the version is unchanged.)
-
-The fourth job, \texttt{deploy-frontend}, retrieves the API Gateway stage URL from the previous job, runs \texttt{npm install} and \texttt{npm run build} with \texttt{VITE\_API\_URL} set to that URL, and synchronises the build output to the frontend S3 bucket via \texttt{aws s3 sync --delete}.
+The third job, \texttt{deploy-frontend}, retrieves the API Gateway stage URL from the previous job, runs \texttt{npm install} and \texttt{npm run build} with \texttt{VITE\_API\_URL} set to that URL, and synchronises the build output to the frontend S3 bucket via \texttt{aws s3 sync --delete}. The custom library was published to PyPI as a one-time action prior to the CI pipeline being established and is referenced as a dependency rather than re-published on every commit.
 
 The entire pipeline requires only two GitHub secrets: \texttt{AWS\_ACCESS\_KEY\_ID} and \texttt{AWS\_SECRET\_ACCESS\_KEY}. All AWS resources, IAM roles, and configuration are created idempotently from the workflow file, allowing the application to be redeployed from scratch into a fresh AWS account in under fifteen minutes.
 
