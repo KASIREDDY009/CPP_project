@@ -22,13 +22,13 @@ A serverless web application that helps users manage their kitchen pantry, track
 - **Backend:** Python (AWS Lambda)
 - **Database:** DynamoDB
 - **CI/CD:** GitHub Actions
-- **Library:** pantry-manager-nci (PyPI)
+- **Library:** recipe-manager-nci v2.0.0 (PyPI)
 
 ## Project Structure
 ```
 ├── backend/          # Lambda function code
 ├── frontend/         # React application
-├── library/          # PyPI package (pantry-manager-nci)
+├── library/          # PyPI package (recipe-manager-nci v2.0.0)
 ├── kasi_cpp/         # LaTeX report
 └── .github/workflows # CI/CD pipeline
 ```

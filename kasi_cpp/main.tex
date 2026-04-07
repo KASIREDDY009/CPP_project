@@ -46,7 +46,7 @@ kasireddy9424@gmail.com}}
 % ABSTRACT
 % ============================================================
 \begin{abstract}
-This paper presents the design, implementation, and deployment of SmartPantry, a serverless cloud-based kitchen inventory tracking application hosted on Amazon Web Services. The application enables users to manage their household pantry by creating, browsing, updating, and deleting food items, with intelligent features including AI-driven food image recognition for automatic categorisation and email-based expiry notifications to reduce household food waste. The system leverages six AWS services programmatically, namely AWS Lambda for serverless compute, Amazon DynamoDB for NoSQL data storage, Amazon API Gateway for RESTful endpoint routing, Amazon S3 for image storage and static website hosting, Amazon Rekognition for intelligent food image label detection, and Amazon Simple Notification Service for expiry alert email notifications. A custom object-oriented Python library called pantry-manager-nci was developed and published to the Python Package Index, providing pantry item management, food category classification, and expiry date tracking utilities. The application follows a fully serverless architecture pattern, eliminating the need for server provisioning and enabling automatic scaling. A comprehensive CI/CD pipeline implemented through GitHub Actions automates testing, infrastructure provisioning, and deployment across all three application tiers. The results demonstrate that serverless cloud services can be effectively orchestrated to deliver a responsive, cost-efficient, and scalable web application that addresses the real-world problem of household food waste through intelligent automation.
+This paper presents the design, implementation, and deployment of SmartPantry, a serverless cloud-based kitchen inventory tracking application hosted on Amazon Web Services. The application enables users to manage their household pantry by creating, browsing, updating, and deleting food items, with intelligent features including AI-driven food image recognition for automatic categorisation and email-based expiry notifications to reduce household food waste. The system leverages six AWS services programmatically, namely AWS Lambda for serverless compute, Amazon DynamoDB for NoSQL data storage, Amazon API Gateway for RESTful endpoint routing, Amazon S3 for image storage and static website hosting, Amazon Rekognition for intelligent food image label detection, and Amazon Simple Notification Service for expiry alert email notifications. A custom object-oriented Python library called recipe-manager-nci was developed and published to the Python Package Index, providing pantry item management, food category classification, and expiry date tracking utilities. The application follows a fully serverless architecture pattern, eliminating the need for server provisioning and enabling automatic scaling. A comprehensive CI/CD pipeline implemented through GitHub Actions automates testing, infrastructure provisioning, and deployment across all three application tiers. The results demonstrate that serverless cloud services can be effectively orchestrated to deliver a responsive, cost-efficient, and scalable web application that addresses the real-world problem of household food waste through intelligent automation.
 \end{abstract}
 
 \begin{IEEEkeywords}
@@ -64,9 +64,9 @@ This project addresses these problems by developing SmartPantry, a cloud-native 
 
 The application is implemented as a fully serverless architecture on Amazon Web Services (AWS) and uses six distinct AWS services in combination. A React single-page application is hosted on Amazon S3, a Python-based AWS Lambda function exposes a REST API through Amazon API Gateway, Amazon DynamoDB persists user accounts and pantry items, Amazon S3 also stores uploaded food images, Amazon Rekognition analyses each uploaded image for food labels, and Amazon Simple Notification Service (SNS) delivers expiry alerts to subscribed user email addresses.
 
-The key contributions of this work are: (1) a practical end-to-end implementation of a multi-service serverless AWS architecture targeted at a real domestic problem; (2) a reusable, well-tested object-oriented Python library, \texttt{pantry-manager-nci}, that encapsulates the domain logic and is published on PyPI; (3) a critical evaluation of each AWS service selection with consideration of alternatives; (4) a fully automated CI/CD pipeline that provisions infrastructure from scratch and requires only two GitHub secrets; and (5) integration of computer vision (Rekognition) and event-driven notifications (SNS) to reduce manual effort and surface time-sensitive information.
+The key contributions of this work are: (1) a practical end-to-end implementation of a multi-service serverless AWS architecture targeted at a real domestic problem; (2) a reusable, well-tested object-oriented Python library, \texttt{recipe-manager-nci}, that encapsulates the domain logic and is published on PyPI; (3) a critical evaluation of each AWS service selection with consideration of alternatives; (4) a fully automated CI/CD pipeline that provisions infrastructure from scratch and requires only two GitHub secrets; and (5) integration of computer vision (Rekognition) and event-driven notifications (SNS) to reduce manual effort and surface time-sensitive information.
 
-The remainder of this paper is organised as follows: Section II analyses requirements, Section III describes the system architecture, Section IV details the custom \texttt{pantry-manager-nci} library, Section V critically evaluates each of the six AWS services, Section VI covers backend and frontend implementation, Section VII presents the CI/CD pipeline, and Section VIII concludes with findings and future work.
+The remainder of this paper is organised as follows: Section II analyses requirements, Section III describes the system architecture, Section IV details the custom \texttt{recipe-manager-nci} library, Section V critically evaluates each of the six AWS services, Section VI covers backend and frontend implementation, Section VII presents the CI/CD pipeline, and Section VIII concludes with findings and future work.
 
 % ============================================================
 % REQUIREMENTS
@@ -130,7 +130,7 @@ A typical end-to-end request flow for the image-based item creation feature illu
     \item Lambda decodes and validates the image, then writes it to the dedicated images S3 bucket.
     \item Lambda invokes Amazon Rekognition's \texttt{DetectLabels} API on the uploaded image.
     \item Rekognition returns a ranked list of detected labels (e.g.\ ``Apple'', ``Fruit'', ``Plant'').
-    \item Lambda passes the labels to the \texttt{CategoryClassifier} from the \texttt{pantry-manager-nci} library to determine the appropriate category.
+    \item Lambda passes the labels to the \texttt{CategoryClassifier} from the \texttt{recipe-manager-nci} library to determine the appropriate category.
     \item Lambda returns the suggested name, category, and image URL to the frontend.
     \item The frontend pre-fills the item creation form, allowing the user to confirm or adjust before saving.
     \item On save, a POST to \texttt{/items} writes the new pantry item to DynamoDB.
@@ -145,11 +145,11 @@ The data model uses a single DynamoDB table with composite keys to support both 
 % ============================================================
 % LIBRARY
 % ============================================================
-\section{Custom Library: pantry-manager-nci}
+\section{Custom Library: recipe-manager-nci}
 
 \subsection{Library Design}
 
-The \texttt{pantry-manager-nci} library encapsulates the domain logic of the SmartPantry application. It is implemented as a pure-Python package with no external runtime dependencies, which keeps the deployed Lambda artefact small and avoids cold-start penalties. The library follows object-oriented design principles, organising functionality into three core classes across three modules:
+The \texttt{recipe-manager-nci} library encapsulates the domain logic of the SmartPantry application. It is implemented as a pure-Python package with no external runtime dependencies, which keeps the deployed Lambda artefact small and avoids cold-start penalties. The library follows object-oriented design principles, organising functionality into three core classes across three modules:
 
 \begin{itemize}
     \item \textbf{PantryManager} (\texttt{manager.py}) provides item-level CRUD operations with input validation. It maintains an in-memory list of items and exposes methods to create, read, update, delete, search, and summarise pantry contents. Validation enforces non-empty names, non-negative quantities, allowed measurement units (\texttt{pcs}, \texttt{kg}, \texttt{g}, \texttt{L}, \texttt{ml}, etc.), and ISO-format expiry dates.
@@ -218,7 +218,7 @@ The library includes 51 unit tests organised across three test modules using \te
 
 \begin{table}[htbp]
 \centering
-\caption{pantry-manager-nci Library Test Distribution}
+\caption{recipe-manager-nci Library Test Distribution}
 \begin{tabular}{lr}
 \toprule
 \textbf{Module} & \textbf{Tests} \\
@@ -233,7 +233,7 @@ test\_expiry.py (ExpiryTracker) & 15 \\
 \label{tab:libtests}
 \end{table}
 
-The library is published on the Python Package Index at \url{https://pypi.org/project/pantry-manager-nci/} and can be installed via \texttt{pip install pantry-manager-nci}.
+The library is published on the Python Package Index as \texttt{recipe-manager-nci} (version 2.0.0, the SmartPantry edition) at \url{https://pypi.org/project/recipe-manager-nci/} and can be installed via \texttt{pip install recipe-manager-nci}.
 
 % ============================================================
 % AWS SERVICES
@@ -242,7 +242,7 @@ The library is published on the Python Package Index at \url{https://pypi.org/pr
 
 \subsection{AWS Lambda}
 
-AWS Lambda provides the entire compute layer for SmartPantry. A single Python 3.11 Lambda function handles all REST endpoints by inspecting the incoming \texttt{path} and \texttt{httpMethod} fields and dispatching to the appropriate handler. The function imports the \texttt{pantry-manager-nci} library and the \texttt{boto3} SDK to interact with the other AWS services.
+AWS Lambda provides the entire compute layer for SmartPantry. A single Python 3.11 Lambda function handles all REST endpoints by inspecting the incoming \texttt{path} and \texttt{httpMethod} fields and dispatching to the appropriate handler. The function imports the \texttt{recipe-manager-nci} library and the \texttt{boto3} SDK to interact with the other AWS services.
 
 \textbf{Strengths:} Zero server management with automatic scaling from zero to thousands of concurrent executions. Sub-second billing makes Lambda extremely cost-effective for a personal application with bursty traffic. Native event sources for API Gateway and S3 simplify integration. The 1\,M-request free tier is more than sufficient for development and demo workloads.
 
@@ -282,7 +282,7 @@ S3 plays two distinct roles in SmartPantry. First, the bucket \texttt{smartpantr
 
 \subsection{Amazon Rekognition}
 
-Rekognition provides the AI image recognition feature that distinguishes SmartPantry from a traditional manual inventory app. When a user uploads a photograph of a food item, Lambda invokes the \texttt{DetectLabels} API on the image stored in S3. Rekognition returns a ranked list of labels with confidence scores, which are then passed to the \texttt{CategoryClassifier} from the \texttt{pantry-manager-nci} library to choose the most appropriate category.
+Rekognition provides the AI image recognition feature that distinguishes SmartPantry from a traditional manual inventory app. When a user uploads a photograph of a food item, Lambda invokes the \texttt{DetectLabels} API on the image stored in S3. Rekognition returns a ranked list of labels with confidence scores, which are then passed to the \texttt{CategoryClassifier} from the \texttt{recipe-manager-nci} library to choose the most appropriate category.
 
 \textbf{Strengths:} Fully managed image analysis with no model training required. The default ``general-purpose'' label set covers common food items well (apple, banana, bread, milk, etc.). Sub-second response times even for high-resolution images. The free tier of 5{,}000 images per month is more than adequate for a demonstration project.
 
@@ -307,7 +307,7 @@ SNS provides the asynchronous email notification feature for items approaching e
 
 \subsection{Backend Implementation}
 
-The backend is a single AWS Lambda function written in Python 3.11 (\texttt{backend/lambda\_function.py}). The handler dispatches incoming requests by inspecting the API Gateway proxy event's \texttt{path} and \texttt{httpMethod} fields. Each route delegates to a small handler function that extracts request parameters, calls the relevant \texttt{pantry-manager-nci} class method, and returns a JSON response wrapped in CORS-friendly headers.
+The backend is a single AWS Lambda function written in Python 3.11 (\texttt{backend/lambda\_function.py}). The handler dispatches incoming requests by inspecting the API Gateway proxy event's \texttt{path} and \texttt{httpMethod} fields. Each route delegates to a small handler function that extracts request parameters, calls the relevant \texttt{recipe-manager-nci} class method, and returns a JSON response wrapped in CORS-friendly headers.
 
 Authentication uses self-contained JSON Web Tokens. The function provides a \texttt{create\_jwt} helper that signs payloads with HMAC-SHA256 and a \texttt{decode\_jwt} helper that verifies signatures and expiry. Passwords are hashed using \texttt{hashlib.pbkdf2\_hmac} with a 16-byte random salt and 100{,}000 iterations.
 
@@ -335,7 +335,7 @@ POST & /notifications/check & Trigger expiry check \\
 \label{tab:endpoints}
 \end{table}
 
-The Lambda function imports the \texttt{pantry-manager-nci} library at module level so the import cost is paid only once per cold start. The library is bundled into the deployment artefact via \texttt{pip install -t} during CI/CD.
+The Lambda function imports the \texttt{recipe-manager-nci} library at module level so the import cost is paid only once per cold start. The library is bundled into the deployment artefact via \texttt{pip install -t} during CI/CD.
 
 \subsection{Frontend Implementation}
 
@@ -366,11 +366,11 @@ On the backend, Lambda decodes the base64 string, generates a UUID for the image
 
 The CI/CD pipeline is implemented as a single GitHub Actions workflow (\texttt{.github/workflows/deploy.yml}) that runs on every push to the \texttt{main} branch. The pipeline is organised into four sequential jobs that together provision infrastructure from scratch, test and deploy code, and update the public endpoints.
 
-The first job, \texttt{test-library}, installs the \texttt{pantry-manager-nci} library in editable mode and runs the full \texttt{pytest} suite of 51 unit tests. Only when all tests pass does the pipeline proceed to deployment.
+The first job, \texttt{test-library}, installs the \texttt{recipe-manager-nci} library in editable mode and runs the full \texttt{pytest} suite of 51 unit tests. Only when all tests pass does the pipeline proceed to deployment.
 
-The second job, \texttt{deploy-backend}, configures AWS credentials, creates the DynamoDB table if absent, creates both S3 buckets (frontend and images) with appropriate website configuration and CORS rules, ensures the SNS topic exists, packages the Lambda deployment artefact (Lambda code plus the \texttt{pantry-manager-nci} library installed via \texttt{pip install -t}), and updates or creates the Lambda function with the appropriate IAM execution role and environment variables. It then provisions an API Gateway REST API with a \texttt{\{proxy+\}} resource integrated to Lambda via AWS\_PROXY, configures CORS preflight, and deploys to the \texttt{prod} stage.
+The second job, \texttt{deploy-backend}, configures AWS credentials, creates the DynamoDB table if absent, creates both S3 buckets (frontend and images) with appropriate website configuration and CORS rules, ensures the SNS topic exists, packages the Lambda deployment artefact (Lambda code plus the \texttt{recipe-manager-nci} library installed via \texttt{pip install -t}), and updates or creates the Lambda function with the appropriate IAM execution role and environment variables. It then provisions an API Gateway REST API with a \texttt{\{proxy+\}} resource integrated to Lambda via AWS\_PROXY, configures CORS preflight, and deploys to the \texttt{prod} stage.
 
-The third job, \texttt{publish-library}, builds the source distribution and wheel for the \texttt{pantry-manager-nci} library and publishes them to the Python Package Index using a stored API token. (The first publish succeeded; subsequent runs are no-ops because the version is unchanged.)
+The third job, \texttt{publish-library}, builds the source distribution and wheel for the \texttt{recipe-manager-nci} library and publishes them to the Python Package Index using a stored API token. (The first publish succeeded; subsequent runs are no-ops because the version is unchanged.)
 
 The fourth job, \texttt{deploy-frontend}, retrieves the API Gateway stage URL from the previous job, runs \texttt{npm install} and \texttt{npm run build} with \texttt{VITE\_API\_URL} set to that URL, and synchronises the build output to the frontend S3 bucket via \texttt{aws s3 sync --delete}.
 
@@ -383,7 +383,7 @@ The entire pipeline requires only two GitHub secrets: \texttt{AWS\_ACCESS\_KEY\_
 
 This project demonstrates the effective integration of six AWS services into a cohesive serverless application that addresses a real household problem. The combination of Lambda, DynamoDB, API Gateway, S3, Rekognition, and SNS produces a system that is fully managed, automatically scales from zero to high load, costs effectively nothing when idle, and provides intelligent automation features that would be costly and time-consuming to build from scratch.
 
-The mock-mode-free, single-table DynamoDB design proved adequate for the data volumes typical of a household pantry, and the on-demand billing model removed any need for capacity planning. The decision to encapsulate domain logic in the \texttt{pantry-manager-nci} library kept the Lambda handler thin (under 400 lines) and enabled deterministic, sub-second unit testing of the 51-test suite without any AWS dependencies. Rekognition's general-purpose label set produced acceptable results for common food items; the fallback to the \texttt{Other} category gracefully handled cases where the specific food type could not be identified.
+The mock-mode-free, single-table DynamoDB design proved adequate for the data volumes typical of a household pantry, and the on-demand billing model removed any need for capacity planning. The decision to encapsulate domain logic in the \texttt{recipe-manager-nci} library kept the Lambda handler thin (under 400 lines) and enabled deterministic, sub-second unit testing of the 51-test suite without any AWS dependencies. Rekognition's general-purpose label set produced acceptable results for common food items; the fallback to the \texttt{Other} category gracefully handled cases where the specific food type could not be identified.
 
 Several findings emerged from this project. First, the additional cost and complexity of running a fully managed image-recognition service is justified for any feature that would otherwise require manual data entry, because the resulting reduction in user friction is the single largest factor affecting whether a personal-use application is adopted in practice. Second, the decision to use a \texttt{\{proxy+\}} resource in API Gateway, with all routing decisions made inside Lambda, dramatically simplified the deployment script and made adding new endpoints a one-file change. Third, publishing the domain library to PyPI early in the project surfaced packaging and metadata issues that would have been more difficult to debug later and produced an artefact that is independently useful.
 
@@ -399,8 +399,8 @@ The complete deployed system is publicly accessible at the following endpoints:
     \item \textbf{Frontend (S3 Static Website):} \url{http://smartpantry-frontend-prod-kasireddy.s3-website-eu-west-1.amazonaws.com}
     \item \textbf{REST API (API Gateway + Lambda):} \url{https://edk7s2uw3a.execute-api.eu-west-1.amazonaws.com/prod}
     \item \textbf{Source Code Repository:} \url{https://github.com/KASIREDDY009/CPP_project}
-    \item \textbf{Custom Library (PyPI):} \url{https://pypi.org/project/pantry-manager-nci/}
-    \item \textbf{Library Installation:} \texttt{pip install pantry-manager-nci}
+    \item \textbf{Custom Library (PyPI):} \url{https://pypi.org/project/recipe-manager-nci/}
+    \item \textbf{Library Installation:} \texttt{pip install recipe-manager-nci}
 \end{itemize}
 
 The deployed region is \texttt{eu-west-1} (Ireland). The Lambda function uses Python 3.11 runtime; the React frontend is built with Vite 5 and Tailwind CSS v3.

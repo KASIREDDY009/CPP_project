@@ -1,16 +1,16 @@
-# pantry-manager-nci
+# recipe-manager-nci (v2.0.0 — SmartPantry edition)
 
-Kitchen inventory management utilities for SmartPantry application.
+Kitchen inventory management utilities for the SmartPantry application.
 
 ## Features
 - Pantry item validation and management
 - Expiry date tracking and alerts
-- Food category classification
-- Nutrition label detection helpers
+- Food category classification (9 categories from 70+ keywords)
+- Rekognition label-based classification helpers
 
 ## Installation
 ```bash
-pip install pantry-manager-nci
+pip install recipe-manager-nci
 ```
 
 ## Usage
