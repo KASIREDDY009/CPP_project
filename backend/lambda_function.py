@@ -18,6 +18,7 @@ sns_client = boto3.client("sns", region_name="eu-west-1")
 # Tables
 users_table = dynamodb.Table("SmartPantryUsers")
 items_table = dynamodb.Table("SmartPantryItems")
+recipes_table = dynamodb.Table("SmartPantryRecipes")
 
 # Config
 S3_BUCKET = os.environ.get("S3_BUCKET", "smartpantry-images-kasireddy")
@@ -389,7 +390,182 @@ def get_dashboard(user):
         return cors_response(500, {"error": str(e)})
 
 
+# ─── Recipe Routes ───
+
+def get_recipes(user):
+    try:
+        resp = recipes_table.scan(
+            FilterExpression=Key("username").eq(user["username"])
+        )
+        recipes = resp.get("Items", [])
+        for recipe in recipes:
+            for k, v in recipe.items():
+                if isinstance(v, Decimal):
+                    recipe[k] = int(v) if v == int(v) else float(v)
+        return cors_response(200, {"recipes": recipes})
+    except Exception as e:
+        return cors_response(500, {"error": str(e)})
+
+
+def create_recipe(body, user):
+    title = body.get("title", "").strip()
+    ingredients = body.get("ingredients", "").strip()
+    instructions = body.get("instructions", "").strip()
+    prep_time = body.get("prep_time", "").strip()
+    category = body.get("category", "").strip()
+
+    if not title:
+        return cors_response(400, {"error": "Recipe title is required"})
+    if not ingredients:
+        return cors_response(400, {"error": "Ingredients are required"})
+    if not instructions:
+        return cors_response(400, {"error": "Instructions are required"})
+
+    recipe_id = str(uuid.uuid4())
+    recipe = {
+        "id": recipe_id,
+        "username": user["username"],
+        "title": title,
+        "ingredients": ingredients,
+        "instructions": instructions,
+        "prep_time": prep_time if prep_time else "",
+        "category": category if category else "General",
+        "created_at": str(int(time.time())),
+    }
+
+    try:
+        recipes_table.put_item(Item=recipe)
+        return cors_response(201, {"recipe": recipe})
+    except Exception as e:
+        return cors_response(500, {"error": str(e)})
+
+
+def get_recipe(recipe_id, user):
+    try:
+        resp = recipes_table.get_item(Key={"id": recipe_id})
+        recipe = resp.get("Item")
+        if not recipe or recipe["username"] != user["username"]:
+            return cors_response(404, {"error": "Recipe not found"})
+        for k, v in recipe.items():
+            if isinstance(v, Decimal):
+                recipe[k] = int(v) if v == int(v) else float(v)
+        return cors_response(200, {"recipe": recipe})
+    except Exception as e:
+        return cors_response(500, {"error": str(e)})
+
+
+def update_recipe(recipe_id, body, user):
+    try:
+        resp = recipes_table.get_item(Key={"id": recipe_id})
+        recipe = resp.get("Item")
+        if not recipe or recipe["username"] != user["username"]:
+            return cors_response(404, {"error": "Recipe not found"})
+
+        update_expr = "SET title = :t, ingredients = :i, instructions = :ins, prep_time = :p, category = :c"
+        recipes_table.update_item(
+            Key={"id": recipe_id},
+            UpdateExpression=update_expr,
+            ExpressionAttributeValues={
+                ":t": body.get("title", recipe["title"]),
+                ":i": body.get("ingredients", recipe["ingredients"]),
+                ":ins": body.get("instructions", recipe["instructions"]),
+                ":p": body.get("prep_time", recipe.get("prep_time", "")),
+                ":c": body.get("category", recipe.get("category", "General")),
+            },
+        )
+        return cors_response(200, {"message": "Recipe updated"})
+    except Exception as e:
+        return cors_response(500, {"error": str(e)})
+
+
+def delete_recipe(recipe_id, user):
+    try:
+        resp = recipes_table.get_item(Key={"id": recipe_id})
+        recipe = resp.get("Item")
+        if not recipe or recipe["username"] != user["username"]:
+            return cors_response(404, {"error": "Recipe not found"})
+
+        recipes_table.delete_item(Key={"id": recipe_id})
+        return cors_response(200, {"message": "Recipe deleted"})
+    except Exception as e:
+        return cors_response(500, {"error": str(e)})
+
+
 # ─── Lambda Handler ───
+
+def seed_demo_data():
+    """POST /auth/seed — create demo user with pantry items and recipes."""
+    demo_user = "demo"
+    demo_email = "demo@smartpantry.com"
+    demo_pass = "Demo1234!"
+
+    try:
+        resp = users_table.get_item(Key={"id": demo_user})
+        if "Item" in resp:
+            return cors_response(200, {"message": "Demo data already exists", "username": demo_user, "password": demo_pass})
+    except Exception:
+        pass
+
+    # Create demo user
+    users_table.put_item(Item={
+        "id": demo_user, "email": demo_email,
+        "password": hash_password(demo_pass), "created_at": str(int(time.time())),
+    })
+
+    now = str(int(time.time()))
+    # Create pantry items
+    pantry_items = [
+        {"name": "Chicken Breast", "category": "Meat", "quantity": 4, "unit": "pcs", "expiry_date": "2026-04-18"},
+        {"name": "Basmati Rice", "category": "Grains", "quantity": 2, "unit": "kg", "expiry_date": "2026-12-01"},
+        {"name": "Olive Oil", "category": "Oils", "quantity": 1, "unit": "bottle", "expiry_date": "2027-03-15"},
+        {"name": "Fresh Tomatoes", "category": "Vegetables", "quantity": 6, "unit": "pcs", "expiry_date": "2026-04-15"},
+        {"name": "Eggs (Free Range)", "category": "Dairy", "quantity": 12, "unit": "pcs", "expiry_date": "2026-04-20"},
+        {"name": "Whole Milk", "category": "Dairy", "quantity": 2, "unit": "litres", "expiry_date": "2026-04-16"},
+        {"name": "Garlic Cloves", "category": "Vegetables", "quantity": 10, "unit": "pcs", "expiry_date": "2026-05-01"},
+        {"name": "Cheddar Cheese", "category": "Dairy", "quantity": 1, "unit": "block", "expiry_date": "2026-04-25"},
+        {"name": "Pasta Penne", "category": "Grains", "quantity": 3, "unit": "packs", "expiry_date": "2027-01-10"},
+        {"name": "Bell Peppers", "category": "Vegetables", "quantity": 4, "unit": "pcs", "expiry_date": "2026-04-17"},
+        {"name": "Greek Yoghurt", "category": "Dairy", "quantity": 2, "unit": "tubs", "expiry_date": "2026-04-19"},
+        {"name": "Soy Sauce", "category": "Condiments", "quantity": 1, "unit": "bottle", "expiry_date": "2027-06-01"},
+    ]
+    for item in pantry_items:
+        items_table.put_item(Item={
+            "id": str(uuid.uuid4()), "username": demo_user,
+            "name": item["name"], "category": item["category"],
+            "quantity": item["quantity"], "unit": item["unit"],
+            "expiry_date": item["expiry_date"], "created_at": now,
+        })
+
+    # Create recipes
+    recipes = [
+        {"name": "Chicken Stir Fry", "ingredients": "Chicken Breast, Bell Peppers, Soy Sauce, Garlic, Olive Oil, Basmati Rice",
+         "instructions": "1. Dice chicken into cubes\n2. Slice bell peppers\n3. Heat olive oil, sauté garlic\n4. Cook chicken until golden\n5. Add peppers and soy sauce\n6. Serve over rice",
+         "cook_time": "25 mins", "servings": 2, "category": "Main Course"},
+        {"name": "Classic Omelette", "ingredients": "Eggs, Cheddar Cheese, Bell Peppers, Whole Milk",
+         "instructions": "1. Whisk 3 eggs with splash of milk\n2. Heat pan with butter\n3. Pour eggs, cook on low\n4. Add cheese and diced peppers\n5. Fold and serve",
+         "cook_time": "10 mins", "servings": 1, "category": "Breakfast"},
+        {"name": "Tomato Pasta", "ingredients": "Pasta Penne, Fresh Tomatoes, Garlic, Olive Oil, Cheddar Cheese",
+         "instructions": "1. Boil pasta until al dente\n2. Sauté garlic in olive oil\n3. Add chopped tomatoes, simmer 15 mins\n4. Toss with pasta\n5. Top with grated cheese",
+         "cook_time": "20 mins", "servings": 3, "category": "Main Course"},
+        {"name": "Yoghurt Parfait", "ingredients": "Greek Yoghurt, Fresh Tomatoes",
+         "instructions": "1. Layer yoghurt in a glass\n2. Add diced tomatoes (or any available fruit)\n3. Repeat layers\n4. Serve chilled",
+         "cook_time": "5 mins", "servings": 1, "category": "Dessert"},
+    ]
+    for r in recipes:
+        recipes_table.put_item(Item={
+            "id": str(uuid.uuid4()), "username": demo_user,
+            "name": r["name"], "ingredients": r["ingredients"],
+            "instructions": r["instructions"], "cook_time": r.get("cook_time", ""),
+            "servings": r.get("servings", 1), "category": r.get("category", ""),
+            "created_at": now,
+        })
+
+    return cors_response(201, {
+        "message": "Demo data seeded",
+        "username": demo_user, "password": demo_pass,
+        "items": len(pantry_items), "recipes": len(recipes),
+    })
+
 
 def lambda_handler(event, context):
     method = event.get("httpMethod", "GET")
@@ -418,6 +594,8 @@ def lambda_handler(event, context):
         return register(body)
     if path == "/auth/login" and method == "POST":
         return login(body)
+    if path == "/auth/seed" and method == "POST":
+        return seed_demo_data()
 
     # ── Protected routes ──
     user = get_user_from_token(headers)
@@ -437,6 +615,21 @@ def lambda_handler(event, context):
     if path.startswith("/items/") and method == "DELETE":
         item_id = path.split("/items/")[1]
         return delete_item(item_id, user)
+
+    # Recipes
+    if path == "/recipes" and method == "GET":
+        return get_recipes(user)
+    if path == "/recipes" and method == "POST":
+        return create_recipe(body, user)
+    if path.startswith("/recipes/") and method == "GET":
+        recipe_id = path.split("/recipes/")[1]
+        return get_recipe(recipe_id, user)
+    if path.startswith("/recipes/") and method == "PUT":
+        recipe_id = path.split("/recipes/")[1]
+        return update_recipe(recipe_id, body, user)
+    if path.startswith("/recipes/") and method == "DELETE":
+        recipe_id = path.split("/recipes/")[1]
+        return delete_recipe(recipe_id, user)
 
     # Image upload
     if path == "/upload" and method == "POST":

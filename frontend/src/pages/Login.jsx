@@ -7,6 +7,16 @@ function Login({ onLogin }) {
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
+  const [seeding, setSeeding] = useState(false);
+
+  const fillDemo = async () => {
+    setSeeding(true);
+    try { await api.post('/auth/seed'); } catch (e) { /* already seeded */ }
+    setUsername('demo');
+    setPassword('Demo1234!');
+    setSeeding(false);
+    toast.success('Demo credentials filled — click Login');
+  };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -52,6 +62,18 @@ function Login({ onLogin }) {
               placeholder="Enter password"
             />
           </div>
+          <div className="p-3 bg-green-50 border border-green-200 rounded-md">
+            <p className="text-xs text-green-700 font-medium mb-2">Quick Demo Access</p>
+            <button
+              type="button"
+              onClick={fillDemo}
+              disabled={seeding}
+              className="w-full py-2 bg-white border border-green-300 text-green-700 text-sm font-medium rounded-md hover:bg-green-100 transition-colors disabled:opacity-50"
+            >
+              {seeding ? 'Setting up demo...' : 'Use Demo Account'}
+            </button>
+          </div>
+
           <button
             type="submit"
             disabled={loading}
