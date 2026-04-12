@@ -499,18 +499,19 @@ def seed_demo_data():
     demo_email = "demo@smartpantry.com"
     demo_pass = "Demo1234!"
 
-    try:
-        resp = users_table.get_item(Key={"id": demo_user})
-        if "Item" in resp:
-            return cors_response(200, {"message": "Demo data already exists", "username": demo_user, "password": demo_pass})
-    except Exception:
-        pass
-
-    # Create demo user
+    # Always upsert demo user to ensure correct password
     users_table.put_item(Item={
         "id": demo_user, "email": demo_email,
         "password": hash_password(demo_pass), "created_at": str(int(time.time())),
     })
+
+    # Check if items already exist
+    try:
+        resp = items_table.scan(FilterExpression=Key("username").eq(demo_user))
+        if resp.get("Items"):
+            return cors_response(200, {"message": "Demo data ready", "username": demo_user, "password": demo_pass})
+    except Exception:
+        pass
 
     now = str(int(time.time()))
     # Create pantry items
